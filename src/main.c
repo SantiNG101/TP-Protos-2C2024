@@ -91,6 +91,8 @@ int main ( const int argc, const char **argv ) {
         err_msg = "unable to create selector";
         goto finally;
     }
+
+    
     const struct fd_handler socksv5 = {
         .handle_read       = socksv5_passive_accept,
         .handle_write      = NULL,
