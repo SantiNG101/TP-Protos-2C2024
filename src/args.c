@@ -117,6 +117,9 @@ parse_args(const int argc, char **argv, struct socks5args *args) {
             case 'N':
                 args->disectors_enabled = false;
                 break;
+            case 'd':
+                args->maildir = optarg;
+                break;
             case 'p':
                 args->socks_port = port(optarg);
                 break;
