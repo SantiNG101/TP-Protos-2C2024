@@ -1,0 +1,10 @@
+
+include ./Makefile.inc
+
+all: server client
+
+main: 
+	$(CC) $(CFLAGS) -o main main.c
+
+clean:
+	rm -f main
