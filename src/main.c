@@ -11,7 +11,10 @@
 #include <sys/socket.h>  // socket
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <arpa/inet.h>
 
+#define PORT 1110
+#define BUFFER_SIZE 1024
 #include "selector.h"
 
 /*
@@ -50,123 +53,75 @@ sigterm_handler(const int signal) {
     done = true;
 }
 
-int main ( const int argc, const char **argv ) {
+void handle_client(int client_socket);
 
-    // puerto
-    unsigned port = 1110;
-    // vision de los argumentos para la configuracion
+int main() {
+    int server_socket, client_socket;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addr_size = sizeof(client_addr);
 
-
-    // no tenemos nada que leer de stdin
-    close(0);
-
-    const char       *err_msg = NULL;
-    selector_status   ss      = SELECTOR_SUCCESS;
-    fd_selector selector      = NULL;
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    //info vital del socket
-    addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port        = htons(port);
-
-    const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(server < 0) {
-        err_msg = "unable to create socket";
-        goto finally;
+    server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_socket == -1) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
     }
 
-    fprintf(stdout, "Listening on TCP port %d\n", port);
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
 
-    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
-
-    if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
-        err_msg = "unable to bind socket";
-        goto finally;
+    if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Binding failed");
+        close(server_socket);
+        exit(EXIT_FAILURE);
     }
 
-    if (listen(server, 500) < 0) {
-        err_msg = "unable to listen";
-        goto finally;
+    if (listen(server_socket, 5) < 0) {
+        perror("Listening failed");
+        close(server_socket);
+        exit(EXIT_FAILURE);
     }
+    printf("POP3 Server started on port %d...\n", PORT);
 
-    // registrar sigterm es útil para terminar el programa normalmente.
-    // esto ayuda mucho en herramientas como valgrind.
-    signal(SIGTERM, sigterm_handler);
-    signal(SIGINT,  sigterm_handler);
-
-
-    // adaptar a nuestro proyecto
-    if(selector_fd_set_nio(server) == -1) {
-        err_msg = "getting server socket flags";
-        goto finally;
-    }
-    const struct selector_init conf = {
-        .signal = SIGALRM,
-        .select_timeout = {
-            .tv_sec  = 10,
-            .tv_nsec = 0,
-        },
-    };
-    if(0 != selector_init(&conf)) {
-        err_msg = "initializing selector";
-        goto finally;
-    }
-
-    selector = selector_new(1024);
-    if(selector == NULL) {
-        err_msg = "unable to create selector";
-        goto finally;
-    }
-
-    
-    const struct fd_handler socksv5 = {
-        .handle_read       = socksv5_passive_accept,
-        .handle_write      = NULL,
-        .handle_close      = NULL, // nada que liberar
-    };
-    ss = selector_register(selector, server, &socksv5,
-                                              OP_READ, NULL);
-    if(ss != SELECTOR_SUCCESS) {
-        err_msg = "registering fd";
-        goto finally;
-    }
-    for(;!done;) {
-        err_msg = NULL;
-        ss = selector_select(selector);
-        if(ss != SELECTOR_SUCCESS) {
-            err_msg = "serving";
-            goto finally;
+    while (1) {
+        client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &addr_size);
+        if (client_socket < 0) {
+            perror("Client connection failed");
+            continue;
         }
-    }
-    if(err_msg == NULL) {
-        err_msg = "closing";
-    }
+        printf("Client connected.\n");
 
-    int ret = 0;
-
-finally:
-    if(ss != SELECTOR_SUCCESS) {
-        fprintf(stderr, "%s: %s\n", (err_msg == NULL) ? "": err_msg,
-                                  ss == SELECTOR_IO
-                                      ? strerror(errno)
-                                      : selector_error(ss));
-        ret = 2;
-    } else if(err_msg) {
-        perror(err_msg);
-        ret = 1;
+        handle_client(client_socket);
     }
 
-    if(selector != NULL) {
-        selector_destroy(selector);
-    }
-    selector_close();
-
-    if(server >= 0) {
-        close(server);
-    }
-    return ret;
-
+    close(server_socket);
+    return 0;
 }
 
+void handle_client(int client_socket) {
+    char buffer[BUFFER_SIZE];
+    ssize_t bytes_received;
+
+    send(client_socket, "+OK POP3 server ready\r\n", 23, 0);
+
+    while (1) {
+        bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0);
+        if (bytes_received <= 0) {
+            printf("Client disconnected.\n");
+            close(client_socket);
+            break;
+        }
+
+        buffer[bytes_received] = '\0';
+
+        if (strncmp(buffer, "USER", 4) == 0) {
+            send(client_socket, "+OK User accepted\r\n", 19, 0);
+        } else if (strncmp(buffer, "QUIT", 4) == 0) {
+            send(client_socket, "+OK Goodbye\r\n", 13, 0);
+            close(client_socket);
+            break;
+        } else {
+            send(client_socket, "-ERR Unknown command\r\n", 22, 0);
+        }
+    }
+}
