@@ -54,6 +54,7 @@ struct pop3 {
 void handle_client(int client_socket);
 int client_validation(char* buffer);
 char* read_user(char* buffer);
+int password_validation(char* pass);
 
 
 #endif
