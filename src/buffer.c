@@ -15,7 +15,7 @@ buffer_reset(buffer *b) {
 }
 
 void
-buffer_init(buffer *b, const size_t n, uint8_t *data) {
+buffer_init(buffer *b, const size_t n, char *data) {
     b->data = data;
     buffer_reset(b);
     b->limit = b->data + n;
@@ -27,7 +27,7 @@ buffer_can_write(buffer *b) {
     return b->limit - b->write > 0;
 }
 
-inline uint8_t *
+inline char *
 buffer_write_ptr(buffer *b, size_t *nbyte) {
     assert(b->write <= b->limit);
     *nbyte = b->limit - b->write;
@@ -39,7 +39,7 @@ buffer_can_read(buffer *b) {
     return b->write - b->read > 0;
 }
 
-inline uint8_t *
+inline char *
 buffer_read_ptr(buffer *b, size_t *nbyte) {
     assert(b->read <= b->write);
     *nbyte = b->write - b->read;
@@ -67,9 +67,9 @@ buffer_read_adv(buffer *b, const ssize_t bytes) {
     }
 }
 
-inline uint8_t
+inline char
 buffer_read(buffer *b) {
-    uint8_t ret;
+    char ret;
     if(buffer_can_read(b)) {
         ret = *b->read;
         buffer_read_adv(b, 1);
@@ -80,7 +80,7 @@ buffer_read(buffer *b) {
 }
 
 inline void
-buffer_write(buffer *b, uint8_t c) {
+buffer_write(buffer *b, char c) {
     if(buffer_can_write(b)) {
         *b->write = c;
         buffer_write_adv(b, 1);
