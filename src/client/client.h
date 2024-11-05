@@ -1,7 +1,7 @@
 #ifndef CLIENT_H
 #define CLIENTE_H
 
-#include "../ignore/parser.h"
+#include "../shared/parser.h"
 
 typedef enum {
     VALIDATION = 1,
