@@ -18,11 +18,11 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
-#include "selector.h"
-#include "request.h"
-#include "buffer.h"
+//#include "selector.h"
+//#include "request.h"
+#include "../shared/buffer.h"
 //#include "stm.h"
-#include"netutils.h"
+//#include"netutils.h"
 
 #define PORT 1110
 #define BUFFER_SIZE 1024

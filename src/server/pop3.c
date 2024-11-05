@@ -4,10 +4,27 @@
 
 
 static char user_path[BUFFER_SIZE];
+maildir* user_structure = NULL;
+
+typedef struct file_list_header{
+    file_list* list;
+    int size;
+}file_list_header;
+
+typedef struct file_list {
+    char* name;
+    char* content;
+    struct file_list* next;
+} file_list;
+
+typedef struct maildir {
+    file_list_header* cur;
+    file_list_header* new;
+    file_list_header* tmp;
+} maildir;
 
 // Private Functions
 int get_command_value( char* command ){
-
 
     if (strncmp(command, "USER", 4) == 0) {
         return USER;
@@ -30,9 +47,52 @@ int get_command_value( char* command ){
 
 }
 
+file_list_header* read_directory( char* path ){
+    return NULL;
+}
+
+int statistics(){
+    return 0;
+}
+
+int list_messages(){
+    return 0;
+}
+
+int view_message(){
+    return 0;
+}
+
+int delete_message(){
+    return 0;
+}
+
+int load_user_structure(){
+    char user_cur[1024];
+    char user_new[1024]; // paths a las distintas secciones de un maildir
+    char user_tmp[1024];
+
+    sprintf(user_cur, "%s%s", user_path, "/cur");
+    sprintf(user_new, "%s%s", user_path, "/new");
+    sprintf(user_tmp, "%s%s", user_path, "/tmp");
+
+    user_structure = calloc(1,sizeof(maildir));
+    user_structure->cur = read_directory( user_cur );
+    user_structure->new = read_directory( user_new );
+    user_structure->tmp = read_directory( user_tmp );
+    
+    return 0;
+}
+
+int destroy_user_structure(){
+    free(user_structure);
+    return 0;
+}
 
 
-void handle_client(int client_socket) {
+
+
+void handle_client(int client_socket, ) {
     char buffer1[BUFFER_SIZE];
     ssize_t bytes_received;
     buffer *b = malloc(sizeof(buffer));
@@ -71,10 +131,19 @@ void handle_client(int client_socket) {
                     } else {
                         response = "+OK User accepted, password needed\r\n";
                         send(client_socket, response, strlen(response), 0);
+                        if ( load_user_structure() ){
+                            response = "-ERR Error loading user structure\r\n";
+                            send(client_socket, response, strlen(response), 0);
+                        }
                     }
                 }
                 break;
             case PASS:
+                if ( user_structure == NULL ){
+                    response = "-ERR User not found, please USER command first!\r\n";
+                    send(client_socket, response, strlen(response), 0);
+                    break;
+                }
                 if ( buffer_read( b ) == '\0' ){
                     response = "-ERR Missing password\r\n";
                     send(client_socket, response, strlen(response), 0);
@@ -90,13 +159,17 @@ void handle_client(int client_socket) {
                 }
                 break;
             case STAT:
-
+                statistics();
+                break;
             case LIST:
-
+                list_messages();
+                break;
             case RETR:
-
+                view_message();
+                break;
             case DELE:
-
+                delete_message();
+                break;
             case NOOP:
                 // no hace nada, mantiene la conexino abierta
                 // ver la condicion de corte, me imagino se tiene que bloquear hasta que le llegue algo
