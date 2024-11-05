@@ -4,18 +4,24 @@
 #include "parser.h"
 
 typedef enum {
-    LOGGED = 1,
-    NOT_LOGGED = 2,
+    VALIDATION = 1,
+    LOGGED = 2,
     TIMEOUT = 3
 } status;
 
-struct client {
+struct users {
 
-    // autentication
     char *user;
     char *pass;
 
 }
+
+struct Client{
+    struct status* state;
+    struct users* user;
+    int total_mail;
+    int not_deleted_mail;
+};
 
 #endif
 
