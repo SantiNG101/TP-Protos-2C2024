@@ -17,11 +17,14 @@ struct users {
 }
 
 struct Client{
-    struct status* state;
+    status state;
     struct users* user;
     int total_mail;
     int not_deleted_mail;
 };
+
+Client* initializing_client();
+void free_client(Client* client);
 
 #endif
 
