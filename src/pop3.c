@@ -5,6 +5,33 @@
 
 static char user_path[BUFFER_SIZE];
 
+// Private Functions
+int get_command_value( char* command ){
+
+
+    if (strncmp(command, "USER", 4) == 0) {
+        return USER;
+    } else if (strncmp(command, "QUIT", 4) == 0) {
+        return QUIT;
+    } else if (strncmp(command, "PASS", 4) == 0) {
+        return PASS;
+    } else if ( strncmp(command, "STAT", 4) == 0 ){ 
+        return STAT;
+    } else if ( strncmp(command, "LIST", 4) == 0 ){ 
+        return LIST;
+    } else if ( strncmp(command, "RETR", 4) == 0 ){ 
+        return RETR;
+    } else if ( strncmp(command, "DELE", 4) == 0 ){ 
+        return DELE;
+    } else if ( strncmp(command, "NOOP", 4) == 0 ){
+        return NOOP;
+    }else
+        return ERROR_COMMAND;
+
+}
+
+
+
 void handle_client(int client_socket) {
     char buffer1[BUFFER_SIZE];
     ssize_t bytes_received;
@@ -16,54 +43,81 @@ void handle_client(int client_socket) {
     while (1) {
         char* response;
         bytes_received = recv(client_socket, buffer1, BUFFER_SIZE, 0);
+        // checkeo si se desconecto o hubo un error
+        if (bytes_received <= 0) {
+            // Error o desconexión del cliente
+            if (bytes_received == 0) {
+                printf("Client disconnected.\n");
+            } else {
+                perror("recv error");
+            }
+            break;
+        }
+        buffer_compact(b); // reinicio el buffer para que no haya problemas
         buffer_write_adv(b, bytes_received-1); // -1 porque recibe el \n
-        
-        buffer_write(b, '\0');
-
+        buffer_write(b, '\0'); 
         char* aux = buffer_read_ptr( b, &(size_t){ 4 } );
         buffer_read_adv( b, (size_t) 4 );
 
-        if (strncmp(aux, "USER", 4) == 0) {
-            if ( buffer_read( b ) == '\0' ){
-                response = "-ERR Missing username\r\n";
-                send(client_socket, response, strlen(response), 0);
-                continue;
-            } else {
-                if ( client_validation( b ) ){
-                    response = "-ERR User not found\r\n";
+        switch(get_command_value(aux)){
+            case USER:
+                if ( buffer_read( b ) == '\0' ){
+                    response = "-ERR Missing username\r\n";
                     send(client_socket, response, strlen(response), 0);
                 } else {
-                    response = "+OK User accepted, password needed\r\n";
-                    send(client_socket, response, strlen(response), 0);
+                    if ( client_validation( b ) ){
+                        response = "-ERR User not found\r\n";
+                        send(client_socket, response, strlen(response), 0);
+                    } else {
+                        response = "+OK User accepted, password needed\r\n";
+                        send(client_socket, response, strlen(response), 0);
+                    }
                 }
-            }
-        } else if (strncmp(aux, "QUIT", 4) == 0) {
-            response = "+OK Goodbye\r\n";
-            send(client_socket, response, strlen(response), 0);
-            printf("Client disconnected.\n");
-            close(client_socket);
-            break;
-        } else if (strncmp(aux, "PASS", 4) == 0) {
-            if ( buffer_read( b ) == '\0' ){
-                response = "-ERR Missing password\r\n";
-                send(client_socket, response, strlen(response), 0);
-                continue;
-            } else {
-                if ( password_validation( b ) ){
-                    response = "-ERR Password incorrect\r\n";
+                break;
+            case PASS:
+                if ( buffer_read( b ) == '\0' ){
+                    response = "-ERR Missing password\r\n";
                     send(client_socket, response, strlen(response), 0);
+                    continue;
                 } else {
-                    response = "+OK Password accepted\r\n";
-                    send(client_socket, response, strlen(response), 0);
+                    if ( password_validation( b ) ){
+                        response = "-ERR Password incorrect\r\n";
+                        send(client_socket, response, strlen(response), 0);
+                    } else {
+                        response = "+OK Password accepted\r\n";
+                        send(client_socket, response, strlen(response), 0);
+                    }
                 }
-            }
-        } else {
-            response = "-ERR Unknown command\r\n";
-            send(client_socket, response, strlen(response), 0);
-        }
-        buffer_compact(b); // reinicio el buffer para que no haya problemas
-    }
+                break;
+            case STAT:
 
+            case LIST:
+
+            case RETR:
+
+            case DELE:
+
+            case NOOP:
+                // no hace nada, mantiene la conexino abierta
+                // ver la condicion de corte, me imagino se tiene que bloquear hasta que le llegue algo
+                // Retorna un OK!
+                response = "OK!!\r\n";
+                send(client_socket, response, strlen(response), 0);
+                break;
+            case QUIT:
+                response = "+OK Goodbye\r\n";
+                send(client_socket, response, strlen(response), 0);
+                printf("Client disconnected.\n");
+                close(client_socket);
+                goto end;
+            default:
+                response = "-ERR Unknown command\r\n";
+                send(client_socket, response, strlen(response), 0);
+        }
+        
+        
+    }
+end:
     free(b);
 }
 
@@ -91,6 +145,7 @@ int client_validation(buffer* buff) {
 int password_validation(buffer* buff) {
     char user_path_extended[2048];
     char* pass = buffer_read_ptr( buff, &(size_t){ buff->write-buff->read } );
+    pass[buff->write-buff->read-1] = '\0'; // elimino el \n
     buffer_read_adv( buff, buff->write-buff->read );
     sprintf(user_path_extended, "%s%s", user_path, "/pass.txt");
 
@@ -101,15 +156,24 @@ int password_validation(buffer* buff) {
     }
 
     char line[256];
-    while (fgets(line, sizeof(line), file)) {
-        printf("%s", line);
+    if (fgets(line, sizeof(line), file) == NULL) {
+        fclose(file);
+        return 1;  // Error al leer la contraseña o archivo vacío
     }
 
     fclose(file);
 
-    if (strcmp(line, pass) == 0) {
-        return 0;
+    // Elimina el salto de línea al final de `line` si existe
+    size_t line_len = strlen(line);
+    if (line_len > 0 && line[line_len - 1] == '\n') {
+        line[line_len - 1] = '\0';
+    }
+    size_t pass_len = strlen(pass);
+
+    // Compara la contraseña leída con la almacenada
+    if (strncmp(line, pass, pass_len) == 0) {
+        return 0;  // Contraseña correcta
     } else {
-        return 1;
+        return 1;  // Contraseña incorrecta
     }
 }

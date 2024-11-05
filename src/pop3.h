@@ -43,7 +43,19 @@ enum pop3_state {
     PROCESSING,
     // estados terminales
     DONE,
-    ERROR
+    ERROR_STATE
+};
+
+enum pop3_command {
+    USER,
+    PASS,
+    STAT,
+    LIST,
+    RETR,
+    DELE,
+    NOOP,
+    QUIT,
+    ERROR_COMMAND = -1
 };
 /*
 struct pop3 {
