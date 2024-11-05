@@ -3,6 +3,12 @@
 
 #include "parser.h"
 
+typedef enum {
+    LOGGED = 1,
+    NOT_LOGGED = 2,
+    TIMEOUT = 3
+} status;
+
 struct client {
 
     // autentication
