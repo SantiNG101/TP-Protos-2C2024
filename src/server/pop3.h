@@ -57,13 +57,15 @@ enum pop3_command {
     QUIT,
     ERROR_COMMAND = -1
 };
-/*
-struct pop3 {
-    struct state_machine stm;
-}
-*/
 
-void handle_client(int client_socket);
+typedef struct user_list {
+    char* name;
+    char* pass;
+    struct user_list* next;
+} user_list;
+
+
+void handle_client(int client_socket, user_list* users);
 int client_validation(buffer* buff);
 int password_validation(buffer* buff);
 

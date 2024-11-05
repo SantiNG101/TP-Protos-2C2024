@@ -3,25 +3,27 @@
 #include <unistd.h>
 
 
-static char user_path[BUFFER_SIZE];
-maildir* user_structure = NULL;
-
-typedef struct file_list_header{
-    file_list* list;
-    int size;
-}file_list_header;
-
 typedef struct file_list {
     char* name;
     char* content;
     struct file_list* next;
 } file_list;
 
+typedef struct file_list_header{
+    file_list* list;
+    int size;
+}file_list_header;
+
 typedef struct maildir {
     file_list_header* cur;
     file_list_header* new;
     file_list_header* tmp;
 } maildir;
+
+// Global Variables
+
+static char user_path[BUFFER_SIZE];
+maildir* user_structure = NULL;
 
 // Private Functions
 int get_command_value( char* command ){
@@ -68,9 +70,9 @@ int delete_message(){
 }
 
 int load_user_structure(){
-    char user_cur[1024];
-    char user_new[1024]; // paths a las distintas secciones de un maildir
-    char user_tmp[1024];
+    char user_cur[BUFFER_SIZE+4];
+    char user_new[BUFFER_SIZE+4]; // paths a las distintas secciones de un maildir
+    char user_tmp[BUFFER_SIZE+4];
 
     sprintf(user_cur, "%s%s", user_path, "/cur");
     sprintf(user_new, "%s%s", user_path, "/new");
@@ -92,7 +94,7 @@ int destroy_user_structure(){
 
 
 
-void handle_client(int client_socket, ) {
+void handle_client(int client_socket, user_list* users ) {
     char buffer1[BUFFER_SIZE];
     ssize_t bytes_received;
     buffer *b = malloc(sizeof(buffer));

@@ -37,7 +37,37 @@ sigterm_handler(const int signal) {
     done = true;
 }
 
-void handle_client(int client_socket);
+user_list* make_user_list( char* users[], int amount ) {
+    
+    if ( amount == 0 ) {
+        return NULL;
+    }
+    user_list* start = calloc(1, sizeof(user_list));
+    user_list* current = start;
+    int i = 0;
+
+    while(amount--) {
+        current->name = strtok(users[i], ":");
+        current->pass = strtok(NULL, ":");
+        if ( amount > 0 ) {
+            current->next = calloc(1, sizeof(user_list));
+            current = current->next;
+        }else{
+            current->next = NULL;
+        }
+    }
+
+    return start;
+}
+
+static char* users[] = {
+    "user1:pass1",
+    "user2:pass2",
+    "user3:pass3",
+    "user4:pass4",
+    "user5:pass5",
+    "user6:pass6"
+};
 
 int main() {
     int server_socket, client_socket;
@@ -45,6 +75,7 @@ int main() {
     socklen_t addr_size = sizeof(client_addr);
 
     // agruments
+    user_list* list = make_user_list(users, 6);
 
 
     int actual_port = PORT;
@@ -81,7 +112,7 @@ int main() {
         }
         printf("Client connected.\n");
 
-        handle_client(client_socket);
+        handle_client(client_socket, list);
     }
 
     close(server_socket);
