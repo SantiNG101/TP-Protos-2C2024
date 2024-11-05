@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 
-char* user_path;
+static char user_path[BUFFER_SIZE];
 
 void handle_client(int client_socket) {
     char buffer1[BUFFER_SIZE];
@@ -14,16 +14,10 @@ void handle_client(int client_socket) {
     send(client_socket, "+OK POP3 server ready\r\n", 23, 0);
 
     while (1) {
+        char* response;
         bytes_received = recv(client_socket, buffer1, BUFFER_SIZE, 0);
         buffer_write_adv(b, bytes_received-1); // -1 porque recibe el \n
-        /* ya tira el de arriba un assert
-        if (bytes_received <= 0) {
-            printf("Client disconnected.\n");
-            close(client_socket);
-            break;
-        }*/
-
-        //buffer1[bytes_received-1] = '\0';
+        
         buffer_write(b, '\0');
 
         char* aux = buffer_read_ptr( b, &(size_t){ 4 } );
@@ -31,33 +25,41 @@ void handle_client(int client_socket) {
 
         if (strncmp(aux, "USER", 4) == 0) {
             if ( buffer_read( b ) == '\0' ){
-                send(client_socket, "-ERR Missing username\r\n", 23, 0);
+                response = "-ERR Missing username\r\n";
+                send(client_socket, response, strlen(response), 0);
                 continue;
             } else {
                 if ( client_validation( b ) ){
-                    send(client_socket, "-ERR User not found\r\n", 21, 0);
+                    response = "-ERR User not found\r\n";
+                    send(client_socket, response, strlen(response), 0);
                 } else {
-                    send(client_socket, "+OK User accepted, password needed\r\n", 36, 0);
+                    response = "+OK User accepted, password needed\r\n";
+                    send(client_socket, response, strlen(response), 0);
                 }
             }
         } else if (strncmp(aux, "QUIT", 4) == 0) {
-            send(client_socket, "+OK Goodbye\r\n", 13, 0);
+            response = "+OK Goodbye\r\n";
+            send(client_socket, response, strlen(response), 0);
             printf("Client disconnected.\n");
             close(client_socket);
             break;
         } else if (strncmp(aux, "PASS", 4) == 0) {
             if ( buffer_read( b ) == '\0' ){
-                send(client_socket, "-ERR Missing password\r\n", 23, 0);
+                response = "-ERR Missing password\r\n";
+                send(client_socket, response, strlen(response), 0);
                 continue;
             } else {
                 if ( password_validation( b ) ){
-                    send(client_socket, "-ERR Password incorrect\r\n", 25, 0);
+                    response = "-ERR Password incorrect\r\n";
+                    send(client_socket, response, strlen(response), 0);
                 } else {
-                    send(client_socket, "+OK Password accepted\r\n", 25, 0);
+                    response = "+OK Password accepted\r\n";
+                    send(client_socket, response, strlen(response), 0);
                 }
             }
         } else {
-            send(client_socket, "-ERR Unknown command\r\n", 22, 0);
+            response = "-ERR Unknown command\r\n";
+            send(client_socket, response, strlen(response), 0);
         }
         buffer_compact(b); // reinicio el buffer para que no haya problemas
     }
@@ -66,10 +68,8 @@ void handle_client(int client_socket) {
 }
 
 int client_validation(buffer* buff) {
-    char* user = buffer_read_ptr( buff, &(size_t){ 256 } );
-    buffer_read_adv( buff, (size_t)256 );
-    user_path = calloc(1 , 1024*sizeof(char) );
-
+    char* user = buffer_read_ptr( buff, &(size_t){ buff->write-buff->read } ); // leeme todo lo que hay
+    buffer_read_adv( buff, buff->write-buff->read );
     sprintf(user_path,"%s%s", BASE_DIR, user);
 
     struct stat statbuf;
@@ -79,35 +79,19 @@ int client_validation(buffer* buff) {
             printf("El directorio '%s' existe.\n", user_path);
         } else {
             printf("El archivo '%s' existe, pero no es un directorio.\n", user_path);
-            free(user);
             return 2;
         }
     } else {
         perror("Error al obtener información del directorio");
-        free(user);
         return 1;
     }
-
-    free(user);
     return 0;
 }
 
-
-/*
-char* read_user(char* buffer1) {
-    char* user = calloc(1,256*sizeof(char));
-    int i = 0;
-    while (buffer1[i] != '\n' && buffer1[i] != '\0') {
-        user[i] = buffer1[i];
-        i++;
-    }
-    user[i]='\0';
-    return user;
-}*/
-
 int password_validation(buffer* buff) {
-    char user_path_extended[256];
-    char* pass = buffer_read_ptr( buff, &(size_t){ 256 } );
+    char user_path_extended[2048];
+    char* pass = buffer_read_ptr( buff, &(size_t){ buff->write-buff->read } );
+    buffer_read_adv( buff, buff->write-buff->read );
     sprintf(user_path_extended, "%s%s", user_path, "/pass.txt");
 
     FILE *file = fopen(user_path_extended, "r");
