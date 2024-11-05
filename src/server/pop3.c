@@ -22,10 +22,15 @@ typedef struct maildir {
 
 // Global Variables
 
-static char user_path[BUFFER_SIZE];
-maildir* user_structure = NULL;
 
+maildir* user_structure = NULL;
+user_list* active_user;
+user_list_header* global_user_list;
 // Private Functions
+
+int client_validation(buffer* buff);
+int password_validation(buffer* buff);
+
 int get_command_value( char* command ){
 
     if (strncmp(command, "USER", 4) == 0) {
@@ -74,10 +79,6 @@ int load_user_structure(){
     char user_new[BUFFER_SIZE+4]; // paths a las distintas secciones de un maildir
     char user_tmp[BUFFER_SIZE+4];
 
-    sprintf(user_cur, "%s%s", user_path, "/cur");
-    sprintf(user_new, "%s%s", user_path, "/new");
-    sprintf(user_tmp, "%s%s", user_path, "/tmp");
-
     user_structure = calloc(1,sizeof(maildir));
     user_structure->cur = read_directory( user_cur );
     user_structure->new = read_directory( user_new );
@@ -94,11 +95,13 @@ int destroy_user_structure(){
 
 
 
-void handle_client(int client_socket, user_list* users ) {
+void handle_client(int client_socket, user_list_header* user_list ) {
     char buffer1[BUFFER_SIZE];
     ssize_t bytes_received;
     buffer *b = malloc(sizeof(buffer));
     buffer_init(b, BUFFER_SIZE, buffer1);
+
+    global_user_list = user_list;
 
     send(client_socket, "+OK POP3 server ready\r\n", 23, 0);
 
@@ -199,54 +202,35 @@ end:
 int client_validation(buffer* buff) {
     char* user = buffer_read_ptr( buff, &(size_t){ buff->write-buff->read } ); // leeme todo lo que hay
     buffer_read_adv( buff, buff->write-buff->read );
-    sprintf(user_path,"%s%s", BASE_DIR, user);
-
-    struct stat statbuf;
-
-    if (stat(user_path, &statbuf) == 0) {
-        if (S_ISDIR(statbuf.st_mode)) {
-            printf("El directorio '%s' existe.\n", user_path);
-        } else {
-            printf("El archivo '%s' existe, pero no es un directorio.\n", user_path);
-            return 2;
-        }
-    } else {
-        perror("Error al obtener información del directorio");
+    
+    if ( global_user_list == NULL || global_user_list->size == 0 ){
         return 1;
     }
-    return 0;
+
+    user_list* aux = global_user_list->list;
+    int amount = global_user_list->size;
+    int user_len = strlen(user);
+
+    while ( amount-- ){
+        if ( strncmp(aux->name, user, user_len) == 0 ){
+            active_user = aux;
+            return 0;
+        }
+        aux = aux->next;
+    }
+    return 1;
+
 }
 
 int password_validation(buffer* buff) {
-    char user_path_extended[2048];
+    
     char* pass = buffer_read_ptr( buff, &(size_t){ buff->write-buff->read } );
     pass[buff->write-buff->read-1] = '\0'; // elimino el \n
     buffer_read_adv( buff, buff->write-buff->read );
-    sprintf(user_path_extended, "%s%s", user_path, "/pass.txt");
 
-    FILE *file = fopen(user_path_extended, "r");
-    if (file == NULL) {
-        perror("Error al abrir el archivo");
-        return 1;
-    }
-
-    char line[256];
-    if (fgets(line, sizeof(line), file) == NULL) {
-        fclose(file);
-        return 1;  // Error al leer la contraseña o archivo vacío
-    }
-
-    fclose(file);
-
-    // Elimina el salto de línea al final de `line` si existe
-    size_t line_len = strlen(line);
-    if (line_len > 0 && line[line_len - 1] == '\n') {
-        line[line_len - 1] = '\0';
-    }
     size_t pass_len = strlen(pass);
-
     // Compara la contraseña leída con la almacenada
-    if (strncmp(line, pass, pass_len) == 0) {
+    if (strncmp(active_user->pass, pass, pass_len) == 0) {
         return 0;  // Contraseña correcta
     } else {
         return 1;  // Contraseña incorrecta

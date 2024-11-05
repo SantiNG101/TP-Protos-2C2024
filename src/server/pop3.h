@@ -64,10 +64,14 @@ typedef struct user_list {
     struct user_list* next;
 } user_list;
 
+typedef struct user_list_header {
+    user_list* list;
+    int size;
+} user_list_header;
 
-void handle_client(int client_socket, user_list* users);
-int client_validation(buffer* buff);
-int password_validation(buffer* buff);
+
+void handle_client(int client_socket, user_list_header* user_list);
+
 
 
 #endif
