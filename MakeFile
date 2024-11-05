@@ -1,24 +1,28 @@
 
 include ./Makefile.inc
 
-.PHONY: all clean
+
 
 #all: server client
 # Archivos fuente y objetos
-SRC := pop3.c main.c
-OBJ := $(SRC:.c=.o)
+SERVER_SOURCES=$(wildcard src/server/*.c)
+CLIENT_SOURCES=$(wildcard src/client/*.c)
+
+
+OUTPUT_FOLDER=./bin
+OUTPUT_FILE=$(OUTPUT_FOLDER)/server
 
 # Regla principal para compilar todo
-all: $(TARGET)
+all: server client
 
 # Regla para compilar el ejecutable a partir de los objetos
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) $(OBJ) -o $(TARGET)
+server:
+	mkdir -p $(OUTPUT_FOLDER)
+	$(CC) $(CFLAGS) $(SERVER_SOURCES) -o server
 
-# Regla para compilar archivos objeto individuales
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
 
 # Regla para limpiar archivos compilados
 clean:
-	rm -f $(OBJ) $(TARGET)
+	rm -f $(OUTPUT_FILE)
+
+.PHONY: all, clean, server, client
