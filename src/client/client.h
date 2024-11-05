@@ -1,7 +1,7 @@
 #ifndef CLIENT_H
 #define CLIENTE_H
 
-#include "parser.h"
+#include "../shared/parser.h"
 
 typedef enum {
     VALIDATION = 1,
@@ -14,7 +14,7 @@ struct users {
     char *user;
     char *pass;
 
-}
+};
 
 struct Client{
     status state;

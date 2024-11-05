@@ -41,7 +41,7 @@ obj/%.o: src/%.c
 
 # Regla para limpiar archivos compilados
 clean:
-	rm -rf $(OUTPUT_FILE)
+	rm -rf $(OUTPUT_FOLDER)
 	rm -rf $(OBJECTS_FOLDER)
 
 .PHONY: all clean server client
