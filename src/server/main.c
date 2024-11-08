@@ -63,22 +63,30 @@ user_list* make_user_list( char* users[], int amount ) {
 }
 
 void send_file(int client_socket, const char *filename) {
+    int file = open(filename, O_RDONLY);
+    if (file < 0) {
+        perror("Failed to open file");
+        return;
+    }
+
     char buffer[BUFFER_SIZE];
-    FILE *file = fopen(filename, "rb");
-    
-    if (!file) {
-        perror("File open failed");
-        close(client_socket);
-        exit(EXIT_FAILURE);
+    ssize_t bytes_read, bytes_sent;
+
+    while ((bytes_read = read(file, buffer, sizeof(buffer))) > 0) {
+        bytes_sent = send(client_socket, buffer, bytes_read, 0);
+        if (bytes_sent < 0) {
+            perror("Failed to send file data");
+            break;
+        }
     }
 
-    ssize_t bytes_read;
-    while ((bytes_read = fread(buffer, sizeof(char), BUFFER_SIZE, file)) > 0) {
-        send(client_socket, buffer, bytes_read, 0);
+    if (bytes_read < 0) {
+        perror("Failed to read file");
     }
 
-    printf("File sent successfully.\n");
-    fclose(file);
+    close(file);
+    printf("File transfer complete.\n");
+    shutdown(client_socket, SHUT_WR);
 }
 
 char** strsep( char* str, char delim ) {
