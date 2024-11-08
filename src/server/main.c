@@ -60,6 +60,25 @@ user_list* make_user_list( char* users[], int amount ) {
     return start;
 }
 
+void send_file(int client_socket, const char *filename) {
+    char buffer[BUFFER_SIZE];
+    FILE *file = fopen(filename, "rb");
+    
+    if (!file) {
+        perror("File open failed");
+        close(client_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    ssize_t bytes_read;
+    while ((bytes_read = fread(buffer, sizeof(char), BUFFER_SIZE, file)) > 0) {
+        send(client_socket, buffer, bytes_read, 0);
+    }
+
+    printf("File sent successfully.\n");
+    fclose(file);
+}
+
 static char* users[] = {
     "user1:pass1",
     "user2:pass2",
