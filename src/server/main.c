@@ -75,8 +75,11 @@ int main() {
     socklen_t addr_size = sizeof(client_addr);
 
     // agruments
-    user_list* list = make_user_list(users, 6);
 
+    user_list_header* user_list = calloc(1, sizeof(user_list_header));
+
+    user_list->list = make_user_list(users, 6);
+    user_list->size = 6;
 
     int actual_port = PORT;
 
@@ -112,7 +115,7 @@ int main() {
         }
         printf("Client connected.\n");
 
-        handle_client(client_socket, list);
+        handle_client(client_socket, user_list);
     }
 
     close(server_socket);
