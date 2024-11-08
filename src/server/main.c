@@ -123,20 +123,10 @@ static char* users[] = {
 };
 
 int main() {
-    int server_socket, client_socket;
-    struct sockaddr_in server_addr, client_addr;
-    socklen_t addr_size = sizeof(client_addr);
-
-    // agruments
-
-    user_list_header* user_list = calloc(1, sizeof(user_list_header));
-
-    user_list->list = make_user_list(users, 6);
-    user_list->size = 6;
-
-    int actual_port = PORT;
-
-    server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    int server_socket;
+    struct sockaddr_in server_addr;
+    
+    server_socket = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (server_socket == -1) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);
@@ -144,35 +134,80 @@ int main() {
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(actual_port);
+    server_addr.sin_port = htons(PORT);
 
+    // Bind socket to address and port
     if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("Binding failed");
         close(server_socket);
         exit(EXIT_FAILURE);
     }
 
-    if (listen(server_socket, 500) < 0) {
+
+    if (listen(server_socket, MAX_CLIENTS) < 0) {
         perror("Listening failed");
         close(server_socket);
         exit(EXIT_FAILURE);
     }
-    printf("POP3 Server started on port %d...\n", actual_port);
+    printf("Server started on port %d...\n", PORT);
+
+    int epoll_fd = epoll_create1(0);
+    if (epoll_fd == -1) {
+        perror("epoll_create1 failed");
+        close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    struct epoll_event event;
+    event.events = EPOLLIN;  
+    event.data.fd = server_socket;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_socket, &event) == -1) {
+        perror("epoll_ctl failed");
+        close(server_socket);
+        close(epoll_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    struct epoll_event events[MAX_EVENTS];
 
     while (1) {
-        client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &addr_size);
-        
-        if (client_socket < 0) {
-            perror("Client connection failed");
+        int num_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+        if (num_events < 0) {
+            perror("epoll_wait failed");
             break;
         }
-        printf("Client connected.\n");
 
-        handle_client(client_socket, user_list);
+        for (int i = 0; i < num_events; i++) {
+            if (events[i].data.fd == server_socket) {
+                struct sockaddr_in client_addr;
+                socklen_t addr_size = sizeof(client_addr);
+                int client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &addr_size);
+                if (client_socket == -1) {
+                    perror("Client connection failed");
+                    continue;
+                }
+
+                int flags = fcntl(client_socket, F_GETFL, 0);
+                fcntl(client_socket, F_SETFL, flags | O_NONBLOCK);
+
+                struct epoll_event client_event;
+                client_event.events = EPOLLIN | EPOLLET; 
+                client_event.data.fd = client_socket;
+                if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &client_event) == -1) {
+                    perror("epoll_ctl failed for client socket");
+                    close(client_socket);
+                    continue;
+                }
+                printf("Accepted new client connection\n");
+
+            } else {
+                handle_client(events[i].data.fd, NULL);
+            }
+        }
     }
 
     close(server_socket);
+    close(epoll_fd);
     return 0;
 }
-
 
