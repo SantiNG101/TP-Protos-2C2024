@@ -26,6 +26,7 @@
 
 #define PORT 1110
 #define BUFFER_SIZE 1024
+#define USER_SIZE 256
 #define BASE_DIR "./root/"
 
 enum pop3_state {

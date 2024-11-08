@@ -30,6 +30,7 @@ usage(const char *progname) {
 }
 
 static bool done = false;
+char** strsep( char* str, char delim );
 
 static void
 sigterm_handler(const int signal) {
@@ -47,8 +48,9 @@ user_list* make_user_list( char* users[], int amount ) {
     int i = 0;
 
     while(amount--) {
-        current->name = strtok(users[i], ":");
-        current->pass = strtok(NULL, ":");
+        char** user = strsep(users[i], ':');
+        current->name = user[0];
+        current->pass = user[1];
         if ( amount > 0 ) {
             current->next = calloc(1, sizeof(user_list));
             current = current->next;
@@ -58,6 +60,30 @@ user_list* make_user_list( char* users[], int amount ) {
     }
 
     return start;
+}
+
+char** strsep( char* str, char delim ) {
+    int i = 0;
+    char** result = calloc(2, sizeof(char*));
+    result[0] = malloc(sizeof(char)*USER_SIZE);
+    result[1] = malloc(sizeof(char)*USER_SIZE);
+    
+    while ( str[i] != '\0' && str[i] != delim ) {
+        result[0][i] = str[i];
+        i++;
+    }
+    result[0][i] = '\0';
+    int j = 0;
+    i++;
+
+    while ( str[i] != '\0' ) {
+        result[1][j] = str[i];
+        i++;
+        j++;
+    }
+    result[1][j] = '\0';
+
+    return result;
 }
 
 static char* users[] = {
