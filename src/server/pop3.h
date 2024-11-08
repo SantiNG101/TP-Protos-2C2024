@@ -17,6 +17,9 @@
 #include <sys/socket.h>  // socket
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <sys/epoll.h>
+#include <fcntl.h>
+#include <dirent.h>
 
 //#include "selector.h"
 //#include "request.h"

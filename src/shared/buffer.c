@@ -100,4 +100,5 @@ buffer_compact(buffer *b) {
         b->read  = b->data;
         b->write = b->data + n;
     }
+    b->data = memset(b->data, 0, b->limit - b->data);
 }
