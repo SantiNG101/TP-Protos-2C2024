@@ -1,5 +1,13 @@
-
 #include "pop3.h"
+
+
+// A 1024 sockets. 1 server 1 cliente -> 512 clientes max en simultaneo
+// => 512 eventos maximo en simultaneo 
+
+#define MAX_CLIENTS 512
+#define MAX_EVENTS 512
+
+static int client_count = 0;
 
 /*
 Estructura de la carpeta para el argumento -d:
@@ -113,6 +121,27 @@ char** strsep( char* str, char delim ) {
     return result;
 }
 
+
+
+struct pollfd pollfds[MAX_CLIENTS + 1];
+
+void init_pollfds() {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        pollfds[i].fd = -1;
+        pollfds[i].events = POLLIN;
+    }
+}
+
+int add_client(int client_fd) {
+    for (int i = 1; i <= MAX_CLIENTS; i++) {
+        if (pollfds[i].fd == -1) {
+            pollfds[i].fd = client_fd;
+            pollfds[i].events = POLLIN;
+            return 0;
+        }
+    }
+    return -1;
+}
 static char* users[] = {
     "user1:pass1",
     "user2:pass2",
@@ -136,13 +165,11 @@ int main() {
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(PORT);
 
-    // Bind socket to address and port
     if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("Binding failed");
         close(server_socket);
         exit(EXIT_FAILURE);
     }
-
 
     if (listen(server_socket, MAX_CLIENTS) < 0) {
         perror("Listening failed");
@@ -151,63 +178,43 @@ int main() {
     }
     printf("Server started on port %d...\n", PORT);
 
-    int epoll_fd = epoll_create1(0);
-    if (epoll_fd == -1) {
-        perror("epoll_create1 failed");
-        close(server_socket);
-        exit(EXIT_FAILURE);
-    }
-
-    struct epoll_event event;
-    event.events = EPOLLIN;  
-    event.data.fd = server_socket;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_socket, &event) == -1) {
-        perror("epoll_ctl failed");
-        close(server_socket);
-        close(epoll_fd);
-        exit(EXIT_FAILURE);
-    }
-
-    struct epoll_event events[MAX_EVENTS];
+    init_pollfds();
+    pollfds[0].fd = server_socket;
+    pollfds[0].events = POLLIN;
 
     while (1) {
-        int num_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
-        if (num_events < 0) {
-            perror("epoll_wait failed");
+        int poll_count = poll(pollfds, client_count + 1, -1);
+
+        if (poll_count < 0) {
+            perror("poll failed");
             break;
         }
 
-        for (int i = 0; i < num_events; i++) {
-            if (events[i].data.fd == server_socket) {
-                struct sockaddr_in client_addr;
-                socklen_t addr_size = sizeof(client_addr);
-                int client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &addr_size);
-                if (client_socket == -1) {
-                    perror("Client connection failed");
-                    continue;
+        for (int i = 0; i <= client_count; i++) {
+            if (pollfds[i].revents & POLLIN) {
+                pollfds[i].revents = 0;
+
+                if (pollfds[i].fd == server_socket) {
+                    int client_socket = accept(server_socket, NULL, NULL);
+                    if (client_socket < 0) {
+                        perror("Accept failed");
+                    } else {
+                        if (add_client(client_socket) < 0) {
+                            printf("Too many clients\n");
+                            close(client_socket);
+                        } else {
+                            client_count++;
+                            printf("Client connected.\n");
+                        }
+                    }
+                } else {
+                        handle_client(pollfds[i].fd, NULL);
                 }
-
-                int flags = fcntl(client_socket, F_GETFL, 0);
-                fcntl(client_socket, F_SETFL, flags | O_NONBLOCK);
-
-                struct epoll_event client_event;
-                client_event.events = EPOLLIN | EPOLLET; 
-                client_event.data.fd = client_socket;
-                if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &client_event) == -1) {
-                    perror("epoll_ctl failed for client socket");
-                    close(client_socket);
-                    continue;
-                }
-                printf("Accepted new client connection\n");
-
-            } else {
-                handle_client(events[i].data.fd, NULL);
             }
         }
     }
 
     close(server_socket);
-    close(epoll_fd);
     return 0;
 }
 

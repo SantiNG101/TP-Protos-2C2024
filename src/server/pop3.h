@@ -17,7 +17,7 @@
 #include <sys/socket.h>  // socket
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <sys/epoll.h>
+#include <sys/poll.h>
 #include <fcntl.h>
 
 //#include "selector.h"
@@ -29,8 +29,6 @@
 #define PORT 1110
 #define BUFFER_SIZE 1024
 #define USER_SIZE 256
-#define MAX_EVENTS 500
-#define MAX_CLIENTS 500
 #define BASE_DIR "./root/"
 
 enum pop3_state {

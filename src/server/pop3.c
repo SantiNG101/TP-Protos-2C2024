@@ -105,7 +105,7 @@ void handle_client(int client_socket, user_list_header* user_list ) {
 
     send(client_socket, "+OK POP3 server ready\r\n", 23, 0);
 
-    while (1) {
+
         char* response;
         bytes_received = recv(client_socket, buffer1, BUFFER_SIZE, 0);
         // checkeo si se desconecto o hubo un error
@@ -116,7 +116,6 @@ void handle_client(int client_socket, user_list_header* user_list ) {
             } else {
                 perror("recv error");
             }
-            break;
         }
         buffer_compact(b); // reinicio el buffer para que no haya problemas
         buffer_write_adv(b, bytes_received-1); // -1 porque recibe el \n
@@ -152,7 +151,6 @@ void handle_client(int client_socket, user_list_header* user_list ) {
                 if ( buffer_read( b ) == '\0' ){
                     response = "-ERR Missing password\r\n";
                     send(client_socket, response, strlen(response), 0);
-                    continue;
                 } else {
                     if ( password_validation( b ) ){
                         response = "-ERR Password incorrect\r\n";
@@ -194,7 +192,7 @@ void handle_client(int client_socket, user_list_header* user_list ) {
         }
         
         
-    }
+    
 end:
     free(b);
 }
