@@ -2,35 +2,14 @@
 #include "pop3.h"
 #include <unistd.h>
 
-
-typedef struct file_list {
-    char* name;
-    int size;
-    struct file_list* next;
-} file_list;
-
-typedef struct file_list_header{
-    file_list* list;
-    int size;
-}file_list_header;
-
-typedef struct maildir {
-    file_list_header* cur;
-    file_list_header* new;
-    file_list_header* tmp;
-} maildir;
-
 // Global Variables
 
 char* nombre_prueba = "Pago_banco_Marta.txt";
 char* contenido_prueba = "Date: 9/12/2018\nFrom: Emisor <juliana@bancomarta.com>\nTo: Receptor <receptor@gmail.com>\nSubject: Asunto del Correo\n\nBuenos dias les envio este correo para poder informarles que su cuota del banco Marta esta inpaga por favor acceda a este link para poder regularizar su situacion: https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
-
-maildir* user_structure = NULL;
+pop3_structure* pop3;
 user_list* active_user;
-user_list_header* global_user_list;
-int cli_socket;
-char* base_dir = "./src/root/";
+
 
 // Private Functions
 
@@ -75,29 +54,29 @@ int amount_mails( file_list_header* list ){
 int stat_handeler(){
     
     int total_bytes = 0;
-    file_list* aux = user_structure->new->list;
+    file_list* aux = pop3->maildir->new->list;
     while( aux != NULL ){
         total_bytes += aux->size;
         aux = aux->next;
     }
-    aux = user_structure->cur->list;
+    aux = pop3->maildir->cur->list;
     while( aux != NULL ){
         total_bytes += aux->size;
         aux = aux->next;
     }
-    aux = user_structure->tmp->list;
+    aux = pop3->maildir->tmp->list;
     while( aux != NULL ){
         total_bytes += aux->size;
         aux = aux->next;
     }
-    int total_messages = user_structure->new->size + user_structure->cur->size + user_structure->tmp->size;
+    int total_messages = pop3->maildir->new->size + pop3->maildir->cur->size + pop3->maildir->tmp->size;
 
     char* response = calloc(1, sizeof(char)*BUFFER_SIZE);
     if ( response == NULL ){
         return 1;
     }
     sprintf(response, "+OK %d %d\r\n", total_messages, total_bytes);
-    send(cli_socket, response, strlen(response), 0);
+    send(pop3->cli_socket, response, strlen(response), 0);
     free(response);
     return 0;
 }
@@ -109,7 +88,7 @@ void list_directory(file_list_header* header, int* index, char* buffer) {
     file_list* current = header->list;
     while (current != NULL) {
         bytes_written = snprintf(buffer, BUFFER_SIZE, "%d %d\r\n", (*index)++, current->size);
-        send(cli_socket, buffer, bytes_written, 0);
+        send(pop3->cli_socket, buffer, bytes_written, 0);
         current = current->next;
     }
 }
@@ -122,25 +101,25 @@ int list_messages(int message_number) {
         int index = 1;
         stat_handeler();
         // List all messages in new, cur, and tmp
-        list_directory(user_structure->new, &index, buffer);
-        list_directory(user_structure->cur, &index, buffer);
-        list_directory(user_structure->tmp, &index, buffer);
+        list_directory(pop3->maildir->new, &index, buffer);
+        list_directory(pop3->maildir->cur, &index, buffer);
+        list_directory(pop3->maildir->tmp, &index, buffer);
 
         // Send end of list marker
-        send(cli_socket, ".\r\n", 3, 0);
+        send(pop3->cli_socket, ".\r\n", 3, 0);
     } 
     else if (message_number > 0) { 
         int remaining = message_number;
         file_list* current = NULL;
 
-        if (remaining <= user_structure->new->size) { 
-            current = user_structure->new->list;
-        } else if (remaining <= user_structure->new->size + user_structure->cur->size) {
-            remaining -= user_structure->new->size;
-            current = user_structure->cur->list;
-        } else if (remaining <= user_structure->new->size + user_structure->cur->size + user_structure->tmp->size) {
-            remaining -= (user_structure->new->size + user_structure->cur->size);
-            current = user_structure->tmp->list;
+        if (remaining <= pop3->maildir->new->size) { 
+            current = pop3->maildir->new->list;
+        } else if (remaining <= pop3->maildir->new->size + pop3->maildir->cur->size) {
+            remaining -= pop3->maildir->new->size;
+            current = pop3->maildir->cur->list;
+        } else if (remaining <= pop3->maildir->new->size + pop3->maildir->cur->size + pop3->maildir->tmp->size) {
+            remaining -= (pop3->maildir->new->size + pop3->maildir->cur->size);
+            current = pop3->maildir->tmp->list;
         } else {
             return -1; // Message number is out of range
         }
@@ -151,7 +130,7 @@ int list_messages(int message_number) {
 
         if (current) { 
             bytes_written = snprintf(buffer, BUFFER_SIZE, "%d %d\r\n", message_number, current->size);
-            send(cli_socket, buffer, bytes_written, 0);
+            send(pop3->cli_socket, buffer, bytes_written, 0);
         } else {
             return -1;
         }
@@ -173,7 +152,7 @@ void send_file(const char *filename) {
     ssize_t bytes_read, bytes_sent;
 
     while ((bytes_read = read(file, buffer, sizeof(buffer))) > 0) {
-        bytes_sent = send(cli_socket, buffer, bytes_read, 0);
+        bytes_sent = send(pop3->cli_socket, buffer, bytes_read, 0);
         if (bytes_sent < 0) {
             perror("Failed to send file data");
             break;
@@ -212,15 +191,15 @@ int view_message( int file_number ){
 
     // reccoro la lista buscando el archivo y obtengo el nombre con el numero
     char buffer[BUFFER_SIZE];
-    char * name = search_file( user_structure->new, file_number );
+    char * name = search_file( pop3->maildir->new, file_number );
     int dir = -1;
     if ( name == NULL ){
-        name = search_file( user_structure->cur, file_number );
+        name = search_file( pop3->maildir->cur, file_number );
         if ( name == NULL ){
-            name = search_file( user_structure->tmp, file_number );
+            name = search_file( pop3->maildir->tmp, file_number );
             if ( name == NULL ){
                 char* response = "-ERR Message not found\r\n";
-                send(cli_socket, response, strlen(response), 0);
+                send(pop3->cli_socket, response, strlen(response), 0);
                 return 1;
             }else{
                 dir = TMP;
@@ -232,7 +211,7 @@ int view_message( int file_number ){
         dir = NEW;
     }
 
-    sprintf(buffer, "%s%s/%s/%s", base_dir, active_user->name, dir == NEW ? "new" : dir == CUR ? "cur" : "tmp", name);
+    sprintf(buffer, "%s%s/%s/%s", pop3->base_dir, active_user->name, dir == NEW ? "new" : dir == CUR ? "cur" : "tmp", name);
 
     send_file( buffer );
     return 0;
@@ -245,7 +224,7 @@ void del_in_list( file_list_header* header_list, int file_number){
     
     if ( file_number == 1 ){
         header_list->list = aux->next;
-        sprintf(path, "%s%s/%s/%s", base_dir, active_user->name, "new", aux->name);
+        sprintf(path, "%s%s/%s/%s", pop3->base_dir, active_user->name, "new", aux->name);
         if (!remove( path )){
             free(path);
             free(aux);
@@ -259,7 +238,7 @@ void del_in_list( file_list_header* header_list, int file_number){
         aux = aux->next;
     }
     file_list* next = aux->next->next;
-    sprintf(path, "%s%s/%s/%s", base_dir, active_user->name, "new", aux->name);
+    sprintf(path, "%s%s/%s/%s", pop3->base_dir, active_user->name, "new", aux->name);
     if (!remove( path )){
         free(path);
         free(aux);
@@ -275,21 +254,21 @@ int delete_message(int file_number){
 
     if ( file_number < 1 ){
         char* response = "-ERR Invalid message number\r\n";
-        send(cli_socket, response, strlen(response), 0);
+        send(pop3->cli_socket, response, strlen(response), 0);
         return 1;
-    }else if ( file_number > user_structure->new->size + user_structure->cur->size + user_structure->tmp->size ){
+    }else if ( file_number > pop3->maildir->new->size + pop3->maildir->cur->size + pop3->maildir->tmp->size ){
         char* response = "-ERR Message not found\r\n";
-        send(cli_socket, response, strlen(response), 0);
+        send(pop3->cli_socket, response, strlen(response), 0);
         return 1;
-    }else if ( file_number <= user_structure->new->size ){
+    }else if ( file_number <= pop3->maildir->new->size ){
         
-        del_in_list( user_structure->new, file_number);
+        del_in_list( pop3->maildir->new, file_number);
 
-    }else if ( file_number <= user_structure->new->size + user_structure->cur->size ){
-        del_in_list( user_structure->cur, file_number-user_structure->new->size);
+    }else if ( file_number <= pop3->maildir->new->size + pop3->maildir->cur->size ){
+        del_in_list( pop3->maildir->cur, file_number-pop3->maildir->new->size);
 
     }else{
-        del_in_list( user_structure->tmp, file_number-(user_structure->new->size + user_structure->cur->size));
+        del_in_list( pop3->maildir->tmp, file_number-(pop3->maildir->new->size + pop3->maildir->cur->size));
         
     }
     return 0;
@@ -371,7 +350,7 @@ int load_user_structure(){
 
     char user_path[BUFFER_SIZE];
 
-    sprintf(user_path, "%s%s/", base_dir, active_user->name);
+    sprintf(user_path, "%s%s/", pop3->base_dir, active_user->name);
 
     char new_path[PATH_MAX];
     char cur_path[PATH_MAX];
@@ -381,26 +360,26 @@ int load_user_structure(){
     snprintf(cur_path, sizeof(cur_path), "%s/cur", user_path);
     snprintf(tmp_path, sizeof(tmp_path), "%s/tmp", user_path);
 
-    user_structure = calloc(1, sizeof(maildir));
+    pop3->maildir = calloc(1, sizeof(maildir));
 
-    user_structure->new = create_file_list(new_path);
-    if (!user_structure->new) {
+    pop3->maildir->new = create_file_list(new_path);
+    if (!pop3->maildir->new) {
         fprintf(stderr, "Error al inicializar la carpeta 'new'\n");
         // Continuar aunque falle, dependiendo de la lógica de tu servidor
     }
-    user_structure->new->size = amount_mails(user_structure->new);
+    pop3->maildir->new->size = amount_mails(pop3->maildir->new);
 
-    user_structure->cur = create_file_list(cur_path);
-    if (!user_structure->cur) {
+    pop3->maildir->cur = create_file_list(cur_path);
+    if (!pop3->maildir->cur) {
         fprintf(stderr, "Error al inicializar la carpeta 'cur'\n");
     }
-    user_structure->cur->size = amount_mails(user_structure->cur);
+    pop3->maildir->cur->size = amount_mails(pop3->maildir->cur);
 
-    user_structure->tmp = create_file_list(tmp_path);
-    if (!user_structure->tmp) {
+    pop3->maildir->tmp = create_file_list(tmp_path);
+    if (!pop3->maildir->tmp) {
         fprintf(stderr, "Error al inicializar la carpeta 'tmp'\n");
     }
-    user_structure->tmp->size = amount_mails(user_structure->tmp);
+    pop3->maildir->tmp->size = amount_mails(pop3->maildir->tmp);
 
     return 0;
 }
@@ -416,12 +395,12 @@ int destroy_user_list(file_list_header* list){
     return 0;
 }
 
-int destroy_user_structure(){
+int destroy_maildir(){
 
-    destroy_user_list(user_structure->cur);
-    destroy_user_list(user_structure->new);
-    destroy_user_list(user_structure->tmp);
-    free(user_structure);
+    destroy_user_list(pop3->maildir->cur);
+    destroy_user_list(pop3->maildir->new);
+    destroy_user_list(pop3->maildir->tmp);
+    free(pop3->maildir);
     return 0;
 
 }
@@ -436,21 +415,19 @@ int parse_number(buffer* buff){
 }
 
 
-void handle_client(int client_socket, user_list_header* user_list ) {
+void handle_client( pop3_structure* pop3_struct ) {
     char buffer1[BUFFER_SIZE];
     ssize_t bytes_received;
     buffer *b = malloc(sizeof(buffer));
     buffer_init(b, BUFFER_SIZE, buffer1);
 
-    // asigno las variables globales
-    cli_socket = client_socket;
-    global_user_list = user_list;
+    pop3 = pop3_struct;
 
-    send(client_socket, "+OK POP3 server ready\r\n", 23, 0);
+    send(pop3->cli_socket, "+OK POP3 server ready\r\n", 23, 0);
 
     while (1) {
         char* response;
-        bytes_received = recv(client_socket, buffer1, BUFFER_SIZE, 0);
+        bytes_received = recv(pop3->cli_socket, buffer1, BUFFER_SIZE, 0);
         // checkeo si se desconecto o hubo un error
         if (bytes_received <= 0) {
             // Error o desconexión del cliente
@@ -475,7 +452,7 @@ void handle_client(int client_socket, user_list_header* user_list ) {
 
         if ( command != USER && active_user == NULL ){
             response = "-ERR Please USER command first\r\n";
-            send(client_socket, response, strlen(response), 0);
+            send(pop3->cli_socket, response, strlen(response), 0);
             continue;
         }
 
@@ -483,32 +460,32 @@ void handle_client(int client_socket, user_list_header* user_list ) {
             case USER:
                 if ( buffer_read( b ) == '\0' ){
                     response = "-ERR Missing username\r\n";
-                    send(client_socket, response, strlen(response), 0);
+                    send(pop3->cli_socket, response, strlen(response), 0);
                 } else {
                     if ( client_validation( b ) ){
                         response = "-ERR User not found\r\n";
-                        send(client_socket, response, strlen(response), 0);
+                        send(pop3->cli_socket, response, strlen(response), 0);
                     } else {
                         response = "+OK User accepted, password needed\r\n";
-                        send(client_socket, response, strlen(response), 0);
+                        send(pop3->cli_socket, response, strlen(response), 0);
                     }
                 }
                 break;
             case PASS:
                 if ( buffer_read( b ) == '\0' ){
                     response = "-ERR Missing password\r\n";
-                    send(client_socket, response, strlen(response), 0);
+                    send(pop3->cli_socket, response, strlen(response), 0);
                     continue;
                 } else {
                     if ( password_validation( b ) ){
                         response = "-ERR Password incorrect\r\n";
-                        send(client_socket, response, strlen(response), 0);
+                        send(pop3->cli_socket, response, strlen(response), 0);
                     } else {
                         response = "+OK Password accepted\r\n";
-                        send(client_socket, response, strlen(response), 0);
+                        send(pop3->cli_socket, response, strlen(response), 0);
                         if ( load_user_structure() ){
                             response = "-ERR Error loading user structure\r\n";
-                            send(client_socket, response, strlen(response), 0);
+                            send(pop3->cli_socket, response, strlen(response), 0);
                         }
                     }
                 }
@@ -524,7 +501,7 @@ void handle_client(int client_socket, user_list_header* user_list ) {
                     int num = parse_number( b );
                     if ( num == 0 ){
                         response = "-ERR Argument Error \r\n";
-                        send(client_socket, response, strlen(response), 0);
+                        send(pop3->cli_socket, response, strlen(response), 0);
                         continue;
                     }
                     list_messages(num);
@@ -533,14 +510,14 @@ void handle_client(int client_socket, user_list_header* user_list ) {
             case RETR:
                 if ( buffer_read( b ) == '\0' ){
                     response = "-ERR Argument Error \r\n";
-                    send(client_socket, response, strlen(response), 0);
+                    send(pop3->cli_socket, response, strlen(response), 0);
                     continue;
                 } else {
                     // parseo el numero 
                     int num = parse_number( b );
                     if ( num == 0 ){
                         response = "-ERR Argument Error \r\n";
-                        send(client_socket, response, strlen(response), 0);
+                        send(pop3->cli_socket, response, strlen(response), 0);
                         continue;
                     }
                     view_message(num);
@@ -549,14 +526,14 @@ void handle_client(int client_socket, user_list_header* user_list ) {
             case DELE:
                 if ( buffer_read( b ) == '\0' ){
                     response = "-ERR Argument Error \r\n";
-                    send(client_socket, response, strlen(response), 0);
+                    send(pop3->cli_socket, response, strlen(response), 0);
                     continue;
                 } else {
                     // parseo el numero 
                     int num = parse_number( b );
                     if ( num == 0 ){
                         response = "-ERR Argument Error \r\n";
-                        send(client_socket, response, strlen(response), 0);
+                        send(pop3->cli_socket, response, strlen(response), 0);
                         continue;
                     }
                     delete_message(num);
@@ -567,18 +544,18 @@ void handle_client(int client_socket, user_list_header* user_list ) {
                 // ver la condicion de corte, me imagino se tiene que bloquear hasta que le llegue algo
                 // Retorna un OK!
                 response = "OK!!\r\n";
-                send(client_socket, response, strlen(response), 0);
+                send(pop3->cli_socket, response, strlen(response), 0);
                 break;
             case QUIT:
                 response = "+OK Goodbye\r\n";
-                send(client_socket, response, strlen(response), 0);
-                destroy_user_structure();
+                send(pop3->cli_socket, response, strlen(response), 0);
+                destroy_maildir();
                 printf("Client disconnected.\n");
-                close(client_socket);
+                close(pop3->cli_socket);
                 goto end;
             default:
                 response = "-ERR Unknown command\r\n";
-                send(client_socket, response, strlen(response), 0);
+                send(pop3->cli_socket, response, strlen(response), 0);
                 buffer_compact(b);
         }
         buffer_compact(b); // reinicio el buffer para que no haya problemas
@@ -592,13 +569,13 @@ int client_validation(buffer* buff) {
     char* user = buffer_read_ptr( buff, &(size_t){ buff->write-buff->read } ); // leeme todo lo que hay
     
     
-    if ( global_user_list == NULL || global_user_list->size == 0 ){
+    if ( pop3->user_list == NULL || pop3->user_list->size == 0 ){
         buffer_read_adv( buff, buff->write-buff->read );
         return 1;
     }
 
-    user_list* aux = global_user_list->list;
-    int amount = global_user_list->size;
+    user_list* aux = pop3->user_list->list;
+    int amount = pop3->user_list->size;
     int user_len = strlen(user);
 
     while ( amount-- ){
@@ -628,4 +605,15 @@ int password_validation(buffer* buff) {
         buffer_read_adv( buff, buff->write-buff->read );
         return 1;  // Contraseña incorrecta
     }
+}
+
+void free_pop3_structure( pop3_structure* pop3_struct ){
+    user_list* aux = pop3_struct->user_list->list;
+    while ( aux != NULL ){
+        user_list* next = aux->next;
+        free(aux);
+        aux = next;
+    }
+    free(pop3_struct->user_list);
+    free(pop3_struct);
 }

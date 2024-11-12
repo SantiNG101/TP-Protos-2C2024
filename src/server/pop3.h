@@ -27,10 +27,10 @@
 //#include "stm.h"
 //#include"netutils.h"
 
-#define PORT 1110
+#define DEFAULT_PORT 1110
+#define DEFAULT_MGMT_PORT 1111
 #define BUFFER_SIZE 1024
 #define USER_SIZE 256
-#define BASE_DIR "./root/"
 
 enum pop3_state {
     // se fija que le pidieron
@@ -73,8 +73,42 @@ typedef struct user_list_header {
     int size;
 } user_list_header;
 
+typedef struct file_list {
+    char* name;
+    int size;
+    struct file_list* next;
+} file_list;
 
-void handle_client(int client_socket, user_list_header* user_list);
+typedef struct file_list_header{
+    file_list* list;
+    int size;
+}file_list_header;
+
+typedef struct maildir {
+    file_list_header* cur;
+    file_list_header* new;
+    file_list_header* tmp;
+} maildir;
+
+typedef struct pop3_structure {
+    user_list_header* user_list;
+    maildir* maildir;
+    char* base_dir;
+    char* host;
+    char* ip;
+    int port;
+    int server_socket;
+    int cli_socket;
+    // para analisis de trafico
+    bool disectors_enabled;
+    int mng_port;
+    char* mng_ip;
+    int mng_socket;
+}pop3_structure;
+
+
+void handle_client( pop3_structure* pop3_struct );
+void free_pop3_structure( pop3_structure* pop3_struct );
 
 
 

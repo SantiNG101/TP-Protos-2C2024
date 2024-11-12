@@ -2,13 +2,9 @@
 #define ARGS_H_kFlmYm1tW9p5npzDr2opQJ9jM8
 
 #include <stdbool.h>
+#include "../server/pop3.h"
 
 #define MAX_USERS 10
-
-struct users {
-    char *name;
-    char *pass;
-};
 
 struct doh {
     char           *host;
@@ -18,18 +14,6 @@ struct doh {
     char           *query;
 };
 
-struct socks5args {
-    char           *socks_addr;
-    unsigned short  socks_port;
-
-    char *          mng_addr;
-    unsigned short  mng_port;
-
-    bool            disectors_enabled;
-
-    struct doh      doh;
-    struct users    users[MAX_USERS];
-};
 
 /**
  * Interpreta la linea de comandos (argc, argv) llenando
@@ -37,7 +21,7 @@ struct socks5args {
  * la ejecución.
  */
 void 
-parse_args(const int argc, char **argv, struct socks5args *args);
+parse_args(const int argc, char **argv, pop3_structure *args);
 
 #endif
 
