@@ -75,7 +75,7 @@ int stat_handeler(){
     if ( response == NULL ){
         return 1;
     }
-    sprintf(response, "+OK %d %d\r\n", total_messages, total_bytes);
+    sprintf(response, "+OK %d messags (%d octets)\r\n", total_messages, total_bytes);
     send(pop3->cli_socket, response, strlen(response), 0);
     free(response);
     return 0;
@@ -271,6 +271,11 @@ int delete_message(int file_number){
         del_in_list( pop3->maildir->tmp, file_number-(pop3->maildir->new->size + pop3->maildir->cur->size));
         
     }
+
+    char* response = malloc(sizeof(char)*BUFFER_SIZE);
+    sprintf(response,"+OK message %d deleted\r\n", file_number);
+    send(pop3->cli_socket, response, strlen(response), 0);
+
     return 0;
 }
 
