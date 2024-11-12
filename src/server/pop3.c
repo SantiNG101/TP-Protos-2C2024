@@ -201,11 +201,19 @@ char* search_file( file_list_header* header, int file_number ){
     return NULL;
 }
 
+enum pop3_directory {
+    NEW,
+    CUR,
+    TMP
+};
+
 
 int view_message( int file_number ){
 
     // reccoro la lista buscando el archivo y obtengo el nombre con el numero
+    char buffer[BUFFER_SIZE];
     char * name = search_file( user_structure->new, file_number );
+    int dir = -1;
     if ( name == NULL ){
         name = search_file( user_structure->cur, file_number );
         if ( name == NULL ){
@@ -214,15 +222,76 @@ int view_message( int file_number ){
                 char* response = "-ERR Message not found\r\n";
                 send(cli_socket, response, strlen(response), 0);
                 return 1;
+            }else{
+                dir = TMP;
             }
+        }else{
+            dir = CUR;
         }
+    }else{
+        dir = NEW;
     }
 
-    send_file( name );
+    sprintf(buffer, "%s%s/%s/%s", base_dir, active_user->name, dir == NEW ? "new" : dir == CUR ? "cur" : "tmp", name);
+
+    send_file( buffer );
     return 0;
 }
 
-int delete_message(){
+void del_in_list( file_list_header* header_list, int file_number){
+
+    char* path = calloc(1, sizeof(char)*BUFFER_SIZE);
+    file_list* aux = header_list->list;
+    
+    if ( file_number == 1 ){
+        header_list->list = aux->next;
+        sprintf(path, "%s%s/%s/%s", base_dir, active_user->name, "new", aux->name);
+        if (!remove( path )){
+            free(path);
+            free(aux);
+            return;
+        }
+        free(path);
+        free(aux);
+        return;
+    }
+    while ( --file_number > 1 ){
+        aux = aux->next;
+    }
+    file_list* next = aux->next->next;
+    sprintf(path, "%s%s/%s/%s", base_dir, active_user->name, "new", aux->name);
+    if (!remove( path )){
+        free(path);
+        free(aux);
+        return;
+    }
+    free(path);
+    free(aux->next);
+    aux->next = next;
+    header_list->size--;
+}
+
+int delete_message(int file_number){
+
+    if ( file_number < 1 ){
+        char* response = "-ERR Invalid message number\r\n";
+        send(cli_socket, response, strlen(response), 0);
+        return 1;
+    }else if ( file_number > user_structure->new->size + user_structure->cur->size + user_structure->tmp->size ){
+        char* response = "-ERR Message not found\r\n";
+        send(cli_socket, response, strlen(response), 0);
+        return 1;
+    }else if ( file_number <= user_structure->new->size ){
+        
+        del_in_list( user_structure->new, file_number);
+
+    }else if ( file_number <= user_structure->new->size + user_structure->cur->size ){
+        del_in_list( user_structure->cur, file_number-user_structure->new->size);
+
+    }else{
+        del_in_list( user_structure->tmp, file_number-(user_structure->new->size + user_structure->cur->size));
+        
+    }
     return 0;
 }
 
@@ -357,19 +426,13 @@ int destroy_user_structure(){
 
 }
 
-void parse_number_for_list(buffer* buff){
+int parse_number(buffer* buff){
 
-    // lo dejo asi y confio; posible error
     char* number = buffer_read_ptr( buff, &(size_t){ buff->write-buff->read } );
+    int num = atoi(number);
     buffer_read_adv( buff, buff->write-buff->read );
 
-    int num = atoi(number);
-    if ( num != 0 ){
-        list_messages(num);
-    }else{
-        char* response = "-ERR Error in list arguments\r\n";
-        send(cli_socket, response, strlen(response), 0);
-    }
+    return num;
 }
 
 
@@ -407,9 +470,8 @@ void handle_client(int client_socket, user_list_header* user_list ) {
         buffer_write_adv(b, bytes_received-1);
         buffer_write(b, '\0'); 
         char* aux = buffer_read_ptr( b, &(size_t){ 4 } );
-        buffer_read_adv( b, (size_t) 4 );
-
         int command = get_command_value(aux);
+        buffer_read_adv( b, (size_t) 4 );
 
         if ( command != USER && active_user == NULL ){
             response = "-ERR Please USER command first\r\n";
@@ -459,14 +521,46 @@ void handle_client(int client_socket, user_list_header* user_list ) {
                     list_messages(-1);
                     continue;
                 } else {
-                    parse_number_for_list( b );
+                    int num = parse_number( b );
+                    if ( num == 0 ){
+                        response = "-ERR Argument Error \r\n";
+                        send(client_socket, response, strlen(response), 0);
+                        continue;
+                    }
+                    list_messages(num);
                 }
                 break;
             case RETR:
-                view_message(1);
+                if ( buffer_read( b ) == '\0' ){
+                    response = "-ERR Argument Error \r\n";
+                    send(client_socket, response, strlen(response), 0);
+                    continue;
+                } else {
+                    // parseo el numero 
+                    int num = parse_number( b );
+                    if ( num == 0 ){
+                        response = "-ERR Argument Error \r\n";
+                        send(client_socket, response, strlen(response), 0);
+                        continue;
+                    }
+                    view_message(num);
+                }
                 break;
             case DELE:
-                delete_message();
+                if ( buffer_read( b ) == '\0' ){
+                    response = "-ERR Argument Error \r\n";
+                    send(client_socket, response, strlen(response), 0);
+                    continue;
+                } else {
+                    // parseo el numero 
+                    int num = parse_number( b );
+                    if ( num == 0 ){
+                        response = "-ERR Argument Error \r\n";
+                        send(client_socket, response, strlen(response), 0);
+                        continue;
+                    }
+                    delete_message(num);
+                }
                 break;
             case NOOP:
                 // no hace nada, mantiene la conexino abierta
@@ -496,9 +590,10 @@ end:
 
 int client_validation(buffer* buff) {
     char* user = buffer_read_ptr( buff, &(size_t){ buff->write-buff->read } ); // leeme todo lo que hay
-    buffer_read_adv( buff, buff->write-buff->read );
+    
     
     if ( global_user_list == NULL || global_user_list->size == 0 ){
+        buffer_read_adv( buff, buff->write-buff->read );
         return 1;
     }
 
@@ -509,10 +604,12 @@ int client_validation(buffer* buff) {
     while ( amount-- ){
         if ( strncmp(aux->name, user, user_len) == 0 ){
             active_user = aux;
+            buffer_read_adv( buff, buff->write-buff->read );
             return 0;
         }
         aux = aux->next;
     }
+    buffer_read_adv( buff, buff->write-buff->read );
     return 1;
 
 }
@@ -521,13 +618,14 @@ int password_validation(buffer* buff) {
     
     char* pass = buffer_read_ptr( buff, &(size_t){ buff->write-buff->read } );
     pass[buff->write-buff->read-1] = '\0'; // elimino el \n
-    buffer_read_adv( buff, buff->write-buff->read );
 
     size_t pass_len = strlen(pass);
     // Compara la contraseña leída con la almacenada
     if (strncmp(active_user->pass, pass, pass_len) == 0) {
+        buffer_read_adv( buff, buff->write-buff->read );
         return 0;  // Contraseña correcta
     } else {
+        buffer_read_adv( buff, buff->write-buff->read );
         return 1;  // Contraseña incorrecta
     }
 }
