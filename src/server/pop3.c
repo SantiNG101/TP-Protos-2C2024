@@ -2,24 +2,6 @@
 #include "pop3.h"
 #include <unistd.h>
 
-
-typedef struct file_list {
-    char* name;
-    char* content;
-    struct file_list* next;
-} file_list;
-
-typedef struct file_list_header{
-    file_list* list;
-    int size;
-}file_list_header;
-
-typedef struct maildir {
-    file_list_header* cur;
-    file_list_header* new;
-    file_list_header* tmp;
-} maildir;
-
 // Global Variables
 
 
@@ -95,7 +77,7 @@ int destroy_user_structure(){
 
 
 
-void handle_client(int client_socket, user_list_header* user_list ) {
+void handle_client(int client_socket, user_list_header* user_list, Client_data* client_data ) {
     char buffer1[BUFFER_SIZE];
     ssize_t bytes_received;
     buffer *b = malloc(sizeof(buffer));

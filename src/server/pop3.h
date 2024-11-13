@@ -72,8 +72,62 @@ typedef struct user_list_header {
     int size;
 } user_list_header;
 
+typedef struct file_list {
+    char* name;
+    int size;
+    struct file_list* next;
+} file_list;
 
-void handle_client(int client_socket, user_list_header* user_list);
+typedef struct file_list_header{
+    file_list* list;
+    int size;
+}file_list_header;
+
+typedef struct maildir {
+    file_list_header* cur;
+    file_list_header* new;
+    file_list_header* tmp;
+} maildir;
+
+typedef struct User{
+    char* name;
+    char* pass;
+} User;
+
+enum client_state {
+    AUTHORIZATION,
+    TRANSACTION,
+    CLOSING,
+    ERROR_CLIENT = -1
+};
+
+typedef struct Client_data {
+    struct pop3_structure* pop3;
+    struct User* user;
+
+    char send_buffer[BUFFER_SIZE];
+    char recv_buffer[BUFFER_SIZE];
+    
+    enum client_state client_state;
+} Client_data;
+
+typedef struct pop3_structure {
+    user_list_header* user_list;
+    maildir* maildir;
+    char* base_dir;
+    char* host;
+    char* ip;
+    int port;
+    int server_socket;
+    int cli_socket;
+    // para analisis de trafico
+    bool disectors_enabled;
+    int mng_port;
+    char* mng_ip;
+    int mng_socket;
+}pop3_structure;
+
+void handle_client(int client_socket, user_list_header* user_list, Client_data* client_data);
 
 
 

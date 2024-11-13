@@ -121,7 +121,7 @@ char** strsep( char* str, char delim ) {
     return result;
 }
 
-
+struct Client_data clients[MAX_CLIENTS];
 
 struct pollfd pollfds[MAX_CLIENTS + 1];
 
@@ -129,6 +129,14 @@ void init_pollfds() {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         pollfds[i].fd = -1;
         pollfds[i].events = POLLIN;
+    }
+}
+
+void init_clientData(){
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        clients[i].client_state = AUTHORIZATION;
+        clients[i].pop3 = calloc(1, sizeof(pop3_structure));
+        clients[i].user = calloc(1, sizeof(User));
     }
 }
 
@@ -179,6 +187,8 @@ int main() {
     printf("Server started on port %d...\n", PORT);
 
     init_pollfds();
+    init_clientData();
+
     pollfds[0].fd = server_socket;
     pollfds[0].events = POLLIN;
 
@@ -208,7 +218,7 @@ int main() {
                         }
                     }
                 } else {
-                        handle_client(pollfds[i].fd, NULL);
+                        handle_client(pollfds[i].fd, NULL, &clients[i]);
                 }
             }
         }
