@@ -89,6 +89,22 @@ typedef struct maildir {
     file_list_header* tmp;
 } maildir;
 
+typedef struct pop3_structure {
+    user_list_header* user_list;
+    maildir* maildir;
+    char* base_dir;
+    char* host;
+    char* ip;
+    int port;
+    int server_socket;
+    int cli_socket;
+    // para analisis de trafico
+    bool disectors_enabled;
+    int mng_port;
+    char* mng_ip;
+    int mng_socket;
+}pop3_structure;
+
 typedef struct User{
     char* name;
     char* pass;
@@ -110,22 +126,6 @@ typedef struct Client_data {
     
     enum client_state client_state;
 } Client_data;
-
-typedef struct pop3_structure {
-    user_list_header* user_list;
-    maildir* maildir;
-    char* base_dir;
-    char* host;
-    char* ip;
-    int port;
-    int server_socket;
-    int cli_socket;
-    // para analisis de trafico
-    bool disectors_enabled;
-    int mng_port;
-    char* mng_ip;
-    int mng_socket;
-}pop3_structure;
 
 void handle_client(int client_socket, user_list_header* user_list, Client_data* client_data);
 
