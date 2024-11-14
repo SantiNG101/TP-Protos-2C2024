@@ -1,6 +1,15 @@
 
 #include "../shared/args.h"
+#include "pop3.h"
 
+
+// A 1024 sockets. 1 server 1 cliente -> 512 clientes max en simultaneo
+// => 512 eventos maximo en simultaneo 
+
+#define MAX_CLIENTS 512
+#define MAX_EVENTS 512
+
+static int client_count = 0;
 static bool done = false;
 
 
@@ -10,30 +19,59 @@ sigterm_handler(const int signal) {
     done = true;
 }
 
+struct Client_data clients[MAX_CLIENTS];
 
+struct pollfd pollfds[MAX_CLIENTS + 1];
+
+void init_pollfds() {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        pollfds[i].fd = -1;
+        pollfds[i].events = POLLIN;
+    }
+}
+
+void init_clientData( pop3_structure* pop3_struct ) {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        clients[i].client_state = AUTHORIZATION;
+        clients[i].pop3 = pop3_struct;
+        clients[i].user = calloc(1, sizeof(User));
+    }
+}
+
+int add_client(int client_fd) {
+    for (int i = 1; i <= MAX_CLIENTS; i++) {
+        if (pollfds[i].fd == -1) {
+            pollfds[i].fd = client_fd;
+            pollfds[i].events = POLLIN;
+            return 0;
+        }
+    }
+    return -1;
+}
 
 int main( const int argc, char **argv ) {
-    int server_socket, client_socket;
-    struct sockaddr_in server_addr, client_addr;
-    socklen_t addr_size = sizeof(client_addr);
+    int server_socket;
+    struct sockaddr_in6 server_addr;
 
-    pop3_structure* pop3_struct = calloc(1, sizeof(pop3_structure));
-    pop3_struct->port = DEFAULT_PORT;
+    // arguments
 
-    // agruments
-
-    parse_args(argc, argv, pop3_struct);
-
-
-    server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    server_socket = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (server_socket == -1) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);
     }
 
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(pop3_struct->port);
+    int opt = 0;
+    if (setsockopt(server_socket, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt)) < 0) {
+        perror("Failed to set IPV6_V6ONLY");
+        close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin6_family = AF_INET6;
+    server_addr.sin6_addr = in6addr_any; 
+    server_addr.sin6_port = htons(PORT);
 
     if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("Binding failed");
@@ -41,23 +79,51 @@ int main( const int argc, char **argv ) {
         exit(EXIT_FAILURE);
     }
 
-    if (listen(server_socket, 500) < 0) {
+    if (listen(server_socket, MAX_CLIENTS) < 0) {
         perror("Listening failed");
         close(server_socket);
         exit(EXIT_FAILURE);
     }
-    printf("POP3 Server started on port %d...\n", pop3_struct->port);
+    printf("Server started on port %d, accepting IPv4 and IPv6 connections...\n", PORT);
 
-    while (1) {
-        client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &addr_size);
-        
-        if (client_socket < 0) {
-            perror("Client connection failed");
+    init_pollfds();
+    init_clientData();
+
+    pollfds[0].fd = server_socket;
+    pollfds[0].events = POLLIN;
+
+    while (!done) {
+        int poll_count = poll(pollfds, client_count + 1, -1);
+
+        if (poll_count < 0) {
+            perror("poll failed");
             break;
         }
-        printf("Client connected.\n");
-        pop3_struct->cli_socket = client_socket;
-        handle_client(pop3_struct);
+
+        for (int i = 0; i <= client_count; i++) {
+            if (pollfds[i].revents & POLLIN) {
+                pollfds[i].revents = 0;
+
+                if (pollfds[i].fd == server_socket) {
+                    struct sockaddr_storage client_addr;
+                    socklen_t addr_len = sizeof(client_addr);
+                    int client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &addr_len);
+                    if (client_socket < 0) {
+                        perror("Accept failed");
+                    } else {
+                        if (add_client(client_socket) < 0) {
+                            printf("Too many clients\n");
+                            close(client_socket);
+                        } else {
+                            client_count++;
+                            printf("Client connected.\n");
+                        }
+                    }
+                } else {
+                    handle_client(pollfds[i].fd, NULL, &clients[i]);
+                }
+            }
+        }
     }
     free_pop3_structure(pop3_struct);
     free(pop3_struct);
@@ -65,5 +131,3 @@ int main( const int argc, char **argv ) {
 
     return 0;
 }
-
-

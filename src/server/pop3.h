@@ -1,7 +1,7 @@
 #ifndef POP3_H
 #define POP3_H
 
-#include<stdio.h>
+#include <stdio.h>
 #include <stdlib.h>  // malloc
 #include <string.h>  // memset
 #include <sys/stat.h>
@@ -17,15 +17,11 @@
 #include <sys/socket.h>  // socket
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <sys/epoll.h>
-#include <fcntl.h>
 #include <dirent.h>
+#include <sys/poll.h>
+#include <fcntl.h>
 
-//#include "selector.h"
-//#include "request.h"
 #include "../shared/buffer.h"
-//#include "stm.h"
-//#include"netutils.h"
 
 #define DEFAULT_PORT 1110
 #define DEFAULT_MGMT_PORT 1111
@@ -106,10 +102,30 @@ typedef struct pop3_structure {
     int mng_socket;
 }pop3_structure;
 
+typedef struct User{
+    char* name;
+    char* pass;
+} User;
 
-void handle_client( pop3_structure* pop3_struct );
+enum client_state {
+    AUTHORIZATION,
+    TRANSACTION,
+    CLOSING,
+    ERROR_CLIENT = -1
+};
+
+typedef struct Client_data {
+    struct pop3_structure* pop3;
+    struct User* user;
+
+    char send_buffer[BUFFER_SIZE];
+    char recv_buffer[BUFFER_SIZE];
+    
+    enum client_state client_state;
+} Client_data;
+
+void handle_client(int client_socket, user_list_header* user_list, Client_data* client_data);
 void free_pop3_structure( pop3_structure* pop3_struct );
-
 
 
 #endif

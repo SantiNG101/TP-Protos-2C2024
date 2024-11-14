@@ -420,7 +420,8 @@ int parse_number(buffer* buff){
 }
 
 
-void handle_client( pop3_structure* pop3_struct ) {
+
+void handle_client(user_list_header* user_list, Client_data* client_data ) {
     char buffer1[BUFFER_SIZE];
     ssize_t bytes_received;
     buffer *b = malloc(sizeof(buffer));
@@ -430,7 +431,7 @@ void handle_client( pop3_structure* pop3_struct ) {
 
     send(pop3->cli_socket, "+OK POP3 server ready\r\n", 23, 0);
 
-    while (1) {
+
         char* response;
         bytes_received = recv(pop3->cli_socket, buffer1, BUFFER_SIZE, 0);
         // checkeo si se desconecto o hubo un error
@@ -441,7 +442,6 @@ void handle_client( pop3_structure* pop3_struct ) {
             } else {
                 perror("recv error");
             }
-            break;
         }
 
         // dependiendo si se tiene \n => 2 o \r\n => 3
@@ -565,7 +565,7 @@ void handle_client( pop3_structure* pop3_struct ) {
         }
         buffer_compact(b); // reinicio el buffer para que no haya problemas
         
-    }
+    
 end:
     free(b);
 }
