@@ -34,7 +34,7 @@ void init_clientData( pop3_structure* pop3_struct ) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         clients[i].client_state = AUTHORIZATION;
         clients[i].pop3 = pop3_struct;
-        clients[i].user = calloc(1, sizeof(User));
+        clients[i].user = NULL;
     }
 }
 

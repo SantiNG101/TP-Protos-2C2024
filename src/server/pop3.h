@@ -72,6 +72,7 @@ typedef struct user_list_header {
 typedef struct file_list {
     char* name;
     int size;
+    bool deleted;
     struct file_list* next;
 } file_list;
 
@@ -102,11 +103,6 @@ typedef struct pop3_structure {
     int mng_socket;
 }pop3_structure;
 
-typedef struct User{
-    char* name;
-    char* pass;
-} User;
-
 enum client_state {
     AUTHORIZATION,
     TRANSACTION,
@@ -116,7 +112,7 @@ enum client_state {
 
 typedef struct Client_data {
     struct pop3_structure* pop3;
-    struct User* user;
+    user_list* user;
 
     char send_buffer[BUFFER_SIZE];
     char recv_buffer[BUFFER_SIZE];

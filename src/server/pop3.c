@@ -8,13 +8,13 @@ char* nombre_prueba = "Pago_banco_Marta.txt";
 char* contenido_prueba = "Date: 9/12/2018\nFrom: Emisor <juliana@bancomarta.com>\nTo: Receptor <receptor@gmail.com>\nSubject: Asunto del Correo\n\nBuenos dias les envio este correo para poder informarles que su cuota del banco Marta esta inpaga por favor acceda a este link para poder regularizar su situacion: https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
 pop3_structure* pop3;
-user_list* active_user;
+Client_data* cli_data;
 
 
 // Private Functions
 
-int client_validation(buffer* buff);
-int password_validation(buffer* buff);
+int client_validation(buffer* buff, Client_data* client_data);
+int password_validation(buffer* buff, Client_data* client_data);
 
 int get_command_value( char* command ){
 
@@ -168,17 +168,20 @@ void send_file(const char *filename) {
         perror("Failed to read file");
     }
 
+    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, "\n\r", 2);
+    send(pop3->cli_socket, "\n\r.\n\r", 5, 0);
+
     close(file);
     printf("File transfer complete.\n");
 }
 
-char* search_file( file_list_header* header, int file_number ){
+file_list* search_file( file_list_header* header, int file_number ){
     int remaining = file_number;
     file_list* current = header->list;
 
     while ( current != NULL ){
         if ( --remaining == 0 ){
-            return current->name;
+            return current;
         }
         current = current->next;
     }
@@ -196,13 +199,13 @@ int view_message( int file_number ){
 
     // reccoro la lista buscando el archivo y obtengo el nombre con el numero
     char buffer[BUFFER_SIZE];
-    char * name = search_file( pop3->maildir->new, file_number );
+    file_list * file = search_file( pop3->maildir->new, file_number );
     int dir = -1;
-    if ( name == NULL ){
-        name = search_file( pop3->maildir->cur, file_number );
-        if ( name == NULL ){
-            name = search_file( pop3->maildir->tmp, file_number );
-            if ( name == NULL ){
+    if ( file == NULL ){
+        file = search_file( pop3->maildir->cur, file_number );
+        if ( file == NULL ){
+            file = search_file( pop3->maildir->tmp, file_number );
+            if ( file == NULL ){
                 char* response = "-ERR Message not found\r\n";
                 // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
                 send(pop3->cli_socket, response, strlen(response), 0);
@@ -217,43 +220,104 @@ int view_message( int file_number ){
         dir = NEW;
     }
 
-    sprintf(buffer, "%s%s/%s/%s", pop3->base_dir, active_user->name, dir == NEW ? "new" : dir == CUR ? "cur" : "tmp", name);
+    char buffer2[BUFFER_SIZE];
+    sprintf(buffer2, "+OK %d octets\r\n", file->size);
+    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, buffer2, strlen(buffer2));
+    send(pop3->cli_socket, buffer2, strlen(buffer2), 0);
+
+    sprintf(buffer, "%s%s/%s/%s", pop3->base_dir, cli_data->user->name, dir == NEW ? "new" : dir == CUR ? "cur" : "tmp", file->name);
 
     send_file( buffer );
     return 0;
 }
 
-void del_in_list( file_list_header* header_list, int file_number){
-
-    char* path = calloc(1, sizeof(char)*BUFFER_SIZE);
-    file_list* aux = header_list->list;
+void delete_marked(){
     
-    if ( file_number == 1 ){
-        header_list->list = aux->next;
-        sprintf(path, "%s%s/%s/%s", pop3->base_dir, active_user->name, "new", aux->name);
-        if (!remove( path )){
-            free(path);
+    char* path = calloc(1, sizeof(char)*BUFFER_SIZE);
+    file_list* aux = pop3->maildir->new->list;
+    int i=0;
+    while ( aux != NULL ){
+        if ( aux->deleted ){
+            sprintf(path, "%s%s/%s/%s", pop3->base_dir, cli_data->user->name, "new", aux->name);
+            if (!remove( path )){
+                perror("Error al borrar archivo");
+            }
+            // libero la memoria de la lista del archivo
+            file_list* next = aux->next;
+            if ( i == 0 ){
+                pop3->maildir->new->list = aux->next;
+            }
             free(aux);
-            return;
+            aux = next;
+
+            pop3->maildir->new->size--;
+        }else{
+            i++;
+            aux = aux->next;
         }
-        free(path);
-        free(aux);
+    }
+
+    // reseteo
+    i=0;
+    aux = pop3->maildir->cur->list;
+    while ( aux != NULL ){
+        if ( aux->deleted ){
+            sprintf(path, "%s%s/%s/%s", pop3->base_dir, cli_data->user->name, "cur", aux->name);
+            if (!remove( path )){
+                perror("Error al borrar archivo");
+            }
+            // libero la memoria de la lista del archivo
+            file_list* next = aux->next;
+            if ( i == 0 ){
+                pop3->maildir->cur->list = aux->next;
+            }
+            free(aux);
+            aux = next;
+
+            pop3->maildir->cur->size--;
+        }else{
+            i++;
+            aux = aux->next;
+        }
+    }
+
+    i=0;
+    aux = pop3->maildir->tmp->list;
+    while ( aux != NULL ){
+        if ( aux->deleted ){
+            sprintf(path, "%s%s/%s/%s", pop3->base_dir, cli_data->user->name, "tmp", aux->name);
+            if (!remove( path )){
+                perror("Error al borrar archivo");
+            }
+            // libero la memoria de la lista del archivo
+            file_list* next = aux->next;
+            if ( i == 0 ){
+                pop3->maildir->tmp->list = aux->next;
+            }
+            free(aux);
+            aux = next;
+
+            pop3->maildir->tmp->size--;
+        }else{
+            i++;
+            aux = aux->next;
+        }
+    }
+
+    free(path);
+}
+
+void mark_del_in_list( file_list_header* header_list, int file_number){
+
+    file_list* aux = header_list->list;
+    if ( file_number == 1 ){
+        aux->deleted = true;
         return;
     }
-    while ( --file_number > 1 ){
+    while ( --file_number > 0 ){
         aux = aux->next;
     }
-    file_list* next = aux->next->next;
-    sprintf(path, "%s%s/%s/%s", pop3->base_dir, active_user->name, "new", aux->name);
-    if (!remove( path )){
-        free(path);
-        free(aux);
-        return;
-    }
-    free(path);
-    free(aux->next);
-    aux->next = next;
-    header_list->size--;
+    aux->deleted = true;
 }
 
 int delete_message(int file_number){
@@ -270,13 +334,13 @@ int delete_message(int file_number){
         return 1;
     }else if ( file_number <= pop3->maildir->new->size ){
         
-        del_in_list( pop3->maildir->new, file_number);
+        mark_del_in_list( pop3->maildir->new, file_number);
 
     }else if ( file_number <= pop3->maildir->new->size + pop3->maildir->cur->size ){
-        del_in_list( pop3->maildir->cur, file_number-pop3->maildir->new->size);
+        mark_del_in_list( pop3->maildir->cur, file_number-pop3->maildir->new->size);
 
     }else{
-        del_in_list( pop3->maildir->tmp, file_number-(pop3->maildir->new->size + pop3->maildir->cur->size));
+        mark_del_in_list( pop3->maildir->tmp, file_number-(pop3->maildir->new->size + pop3->maildir->cur->size));
         
     }
 
@@ -335,6 +399,7 @@ file_list_header* create_file_list(const char* directory_path) {
             // Asignar solo el nombre del archivo
             new_file->name = strdup(entry->d_name);
             new_file->size = file_stat.st_size;
+            new_file->deleted = false;
             if (!new_file->name) {
                 perror("Error al asignar memoria para el nombre del archivo");
                 free(new_file);
@@ -364,7 +429,7 @@ int load_user_structure(){
 
     char user_path[BUFFER_SIZE];
 
-    sprintf(user_path, "%s%s/", pop3->base_dir, active_user->name);
+    sprintf(user_path, "%s%s/", pop3->base_dir, cli_data->user->name);
 
     char new_path[PATH_MAX];
     char cur_path[PATH_MAX];
@@ -437,6 +502,7 @@ void handle_client(Client_data* client_data ) {
     buffer_init(b, BUFFER_SIZE, buffer1);
 
     pop3 = client_data->pop3;
+    cli_data = client_data;
 
     char* response;
     // bytes_read = read_socket_buffer(buffer1, client_data->pop3->cli_socket, BUFFER_SIZE);
@@ -460,20 +526,19 @@ void handle_client(Client_data* client_data ) {
     char* aux = buffer_read_ptr( b, &(size_t){ 4 } );
     int command = get_command_value(aux);
     buffer_read_adv( b, (size_t) 4 );
-    if ( command != USER && active_user == NULL ){
-        response = "-ERR Please USER command first\r\n";
-        // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-        send(pop3->cli_socket, response, strlen(response), 0);
-        return;
-    }
+    
+
     switch(command){
         case USER:
+            if ( client_data->client_state != AUTHORIZATION ){
+                client_data->client_state = AUTHORIZATION;
+            }
             if ( buffer_read( b ) == '\0' ){
                 response = "-ERR Missing username\r\n";
                 // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
                 send(pop3->cli_socket, response, strlen(response), 0);
             } else {
-                if ( client_validation( b ) ){
+                if ( client_validation( b, client_data ) ){
                     response = "-ERR User not found\r\n";
                     // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
                     send(pop3->cli_socket, response, strlen(response), 0);
@@ -485,13 +550,19 @@ void handle_client(Client_data* client_data ) {
             }
             break;
         case PASS:
+            if ( client_data->client_state != AUTHORIZATION ){
+                response = "-ERR You had already logged on\r\n";
+                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                send(pop3->cli_socket, response, strlen(response), 0);
+                break;
+            }
             if ( buffer_read( b ) == '\0' ){
                 response = "-ERR Missing password\r\n";
                 // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
                 send(pop3->cli_socket, response, strlen(response), 0);
                 break;
             } else {
-                if ( password_validation( b ) ){
+                if ( password_validation( b, client_data ) ){
                     response = "-ERR Password incorrect\r\n";
                     // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
                     send(pop3->cli_socket, response, strlen(response), 0);
@@ -499,6 +570,7 @@ void handle_client(Client_data* client_data ) {
                     response = "+OK Password accepted\r\n";
                     // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
                     send(pop3->cli_socket, response, strlen(response), 0);
+                    client_data->client_state = TRANSACTION;
                     if ( load_user_structure() ){
                         response = "-ERR Error loading user structure\r\n";
                         // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
@@ -508,9 +580,21 @@ void handle_client(Client_data* client_data ) {
             }
             break;
         case STAT:
+            if ( client_data->client_state != TRANSACTION ){
+                response = "-ERR You must log in first\r\n";
+                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                send(pop3->cli_socket, response, strlen(response), 0);
+                break;
+            }
             stat_handeler();
             break;
         case LIST:
+            if ( client_data->client_state != TRANSACTION ){
+                response = "-ERR You must log in first\r\n";
+                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                send(pop3->cli_socket, response, strlen(response), 0);
+                break;
+            }
             if ( buffer_read( b ) == '\0' ){
                 list_messages(-1);
                 break;
@@ -526,6 +610,12 @@ void handle_client(Client_data* client_data ) {
             }
             break;
         case RETR:
+            if ( client_data->client_state != TRANSACTION ){
+                response = "-ERR You must log in first\r\n";
+                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                send(pop3->cli_socket, response, strlen(response), 0);
+                break;
+            }
             if ( buffer_read( b ) == '\0' ){
                 response = "-ERR Argument Error \r\n";
                 // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
@@ -544,6 +634,12 @@ void handle_client(Client_data* client_data ) {
             }
             break;
         case DELE:
+            if ( client_data->client_state != TRANSACTION ){
+                response = "-ERR You must log in first\r\n";
+                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                send(pop3->cli_socket, response, strlen(response), 0);
+                break;
+            }
             if ( buffer_read( b ) == '\0' ){
                 response = "-ERR Argument Error \r\n";
                 // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
@@ -558,13 +654,12 @@ void handle_client(Client_data* client_data ) {
                     send(pop3->cli_socket, response, strlen(response), 0);
                     break;
                 }
+                // marca como borrado el mensaje
                 delete_message(num);
             }
             break;
         case NOOP:
-            // no hace nada, mantiene la conexino abierta
-            // ver la condicion de corte, me imagino se tiene que bloquear hasta que le llegue algo
-            // Retorna un OK!
+            // Retorna un OK!, no hace nada
             response = "OK!!\r\n";
             // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
             send(pop3->cli_socket, response, strlen(response), 0);
@@ -573,6 +668,8 @@ void handle_client(Client_data* client_data ) {
             response = "+OK Goodbye\r\n";
             // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
             send(pop3->cli_socket, response, strlen(response), 0);
+            client_data->client_state = CLOSING;
+            delete_marked();
             destroy_maildir();
             printf("Client disconnected.\n");
             close(pop3->cli_socket);
@@ -590,7 +687,7 @@ end:
     free(b);
 }
 
-int client_validation(buffer* buff) {
+int client_validation(buffer* buff, Client_data* client_data) {
     char* user = buffer_read_ptr( buff, &(size_t){ buff->write-buff->read } ); // leeme todo lo que hay
     
     
@@ -605,7 +702,7 @@ int client_validation(buffer* buff) {
 
     while ( amount-- ){
         if ( strncmp(aux->name, user, user_len) == 0 ){
-            active_user = aux;
+            client_data->user = aux;
             buffer_read_adv( buff, buff->write-buff->read );
             return 0;
         }
@@ -616,14 +713,18 @@ int client_validation(buffer* buff) {
 
 }
 
-int password_validation(buffer* buff) {
+int password_validation(buffer* buff, Client_data* client_data) {
+
+    if ( client_data->user == NULL || client_data->user->pass == NULL ){
+        return 1;
+    }
     
     char* pass = buffer_read_ptr( buff, &(size_t){ buff->write-buff->read } );
     pass[buff->write-buff->read-1] = '\0'; // elimino el \n
 
     size_t pass_len = strlen(pass);
     // Compara la contraseña leída con la almacenada
-    if (strncmp(active_user->pass, pass, pass_len) == 0) {
+    if (strncmp(client_data->user->pass, pass, pass_len) == 0) {
         buffer_read_adv( buff, buff->write-buff->read );
         return 0;  // Contraseña correcta
     } else {
