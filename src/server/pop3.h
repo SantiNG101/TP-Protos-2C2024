@@ -54,6 +54,7 @@ enum pop3_command {
     RETR,
     DELE,
     NOOP,
+    RSET,
     QUIT,
     ERROR_COMMAND = -1
 };

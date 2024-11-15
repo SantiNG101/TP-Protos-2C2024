@@ -34,6 +34,8 @@ int get_command_value( char* command ){
         return DELE;
     } else if ( strncmp(command, "NOOP", 4) == 0 ){
         return NOOP;
+    }else if ( strncmp(command, "RSET", 4) == 0 ){
+        return RSET;
     }else
         return ERROR_COMMAND;
 
@@ -229,6 +231,38 @@ int view_message( int file_number ){
 
     send_file( buffer );
     return 0;
+}
+
+void unmark_all(){
+    file_list* aux = pop3->maildir->new->list;
+    while ( aux != NULL ){
+        if ( aux->deleted ){
+            aux->deleted = false;
+        }else{
+            aux = aux->next;
+        }
+    }
+
+    aux = pop3->maildir->cur->list;
+    while ( aux != NULL ){
+        if ( aux->deleted ){
+            aux->deleted = false;
+        }else{
+            aux = aux->next;
+        }
+    }
+
+    aux = pop3->maildir->tmp->list;
+    while ( aux != NULL ){
+        if ( aux->deleted ){
+            aux->deleted = false;
+        }else{
+            aux = aux->next;
+        }
+    }
+
+    stat_handeler();
+
 }
 
 void delete_marked(){
@@ -578,6 +612,15 @@ void handle_client(Client_data* client_data ) {
                     }
                 }
             }
+            break;
+        case RSET:
+            if ( client_data->client_state != TRANSACTION ){
+                response = "-ERR You must log in first\r\n";
+                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                send(pop3->cli_socket, response, strlen(response), 0);
+                break;
+            }
+            unmark_all();
             break;
         case STAT:
             if ( client_data->client_state != TRANSACTION ){
