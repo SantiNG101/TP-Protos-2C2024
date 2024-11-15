@@ -572,16 +572,15 @@ int parse_number(buffer* buff){
 
 
 void handle_client(Client_data* client_data ) {
-    char buffer1[BUFFER_SIZE];
     ssize_t bytes_received;
     buffer *b = malloc(sizeof(buffer));
-    buffer_init(b, BUFFER_SIZE, buffer1);
+    buffer_init(b, BUFFER_SIZE, client_data->recv_buffer);
 
     pop3 = client_data->pop3;
     cli_data = client_data;
 
     char* response;
-    bytes_received = read_socket_buffer(buffer1, client_data->pop3->cli_socket, BUFFER_SIZE);
+    bytes_received = read_socket_buffer(client_data->recv_buffer, client_data->pop3->cli_socket, BUFFER_SIZE);
     //bytes_received = recv(pop3->cli_socket, buffer1, BUFFER_SIZE, 0);
     // checkeo si se desconecto o hubo un error
     if (bytes_received <= 0) {
