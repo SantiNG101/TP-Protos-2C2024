@@ -120,8 +120,8 @@ int stat_handeler(){
         return 1;
     }
     sprintf(response, "+OK %d messags (%d octets)\r\n", total_messages, total_bytes);
-    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-    send(pop3->cli_socket, response, strlen(response), 0);
+    write_socket_buffer(cli_data->send_buffer, cli_data->pop3->cli_socket, response, strlen(response));
+    // send(pop3->cli_socket, response, strlen(response), 0);
     free(response);
     return 0;
 }
@@ -133,8 +133,8 @@ void list_directory(file_list_header* header, int* index, char* buffer) {
     file_list* current = header->list;
     while (current != NULL) {
         bytes_written = snprintf(buffer, BUFFER_SIZE, "%d %d\r\n", (*index)++, current->size);
-        // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, buffer, bytes_written);
-        send(pop3->cli_socket, buffer, bytes_written, 0);
+        write_socket_buffer(cli_data->send_buffer, cli_data->pop3->cli_socket, buffer, bytes_written);
+        // send(pop3->cli_socket, buffer, bytes_written, 0);
         current = current->next;
     }
 }
@@ -152,8 +152,8 @@ int list_messages(int message_number) {
         list_directory(pop3->maildir->tmp, &index, buffer);
 
         // Send end of list marker
-        // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, ".\r\n", 3);
-        send(pop3->cli_socket, ".\r\n", 3, 0);
+        write_socket_buffer(cli_data->send_buffer, cli_data->pop3->cli_socket, ".\r\n", 3);
+        //sendpop3->cli_socket, ".\r\n", 3, 0);
     } 
     else if (message_number > 0) { 
         int remaining = message_number;
@@ -177,8 +177,8 @@ int list_messages(int message_number) {
 
         if (current) { 
             bytes_written = snprintf(buffer, BUFFER_SIZE, "%d %d\r\n", message_number, current->size);
-            // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, buffer, bytes_written);
-            send(pop3->cli_socket, buffer, bytes_written, 0);
+            write_socket_buffer(cli_data->send_buffer, cli_data->pop3->cli_socket, buffer, bytes_written);
+            //sendpop3->cli_socket, buffer, bytes_written, 0);
         } else {
             return -1;
         }
@@ -200,8 +200,8 @@ void send_file(const char *filename) {
     ssize_t bytes_read, bytes_sent;
 
     while ((bytes_read = read(file, buffer, sizeof(buffer))) > 0) {
-        // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, buffer, bytes_read);
-        bytes_sent = send(pop3->cli_socket, buffer, bytes_read, 0);
+        bytes_sent = write_socket_buffer(cli_data->send_buffer, cli_data->pop3->cli_socket, buffer, bytes_read);
+        //bytes_sent = //sendpop3->cli_socket, buffer, bytes_read, 0);
         if (bytes_sent < 0) {
             perror("Failed to send file data");
             break;
@@ -212,8 +212,8 @@ void send_file(const char *filename) {
         perror("Failed to read file");
     }
 
-    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, "\n\r", 2);
-    send(pop3->cli_socket, "\n\r.\n\r", 5, 0);
+    write_socket_buffer(cli_data->send_buffer, cli_data->pop3->cli_socket, "\n\r", 2);
+    //sendpop3->cli_socket, "\n\r.\n\r", 5, 0);
 
     close(file);
     printf("File transfer complete.\n");
@@ -251,8 +251,8 @@ int view_message( int file_number ){
             file = search_file( pop3->maildir->tmp, file_number );
             if ( file == NULL ){
                 char* response = "-ERR Message not found\r\n";
-                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                send(pop3->cli_socket, response, strlen(response), 0);
+                write_socket_buffer(cli_data->send_buffer, cli_data->pop3->cli_socket, response, strlen(response));
+                //sendpop3->cli_socket, response, strlen(response), 0);
                 return 1;
             }else{
                 dir = TMP;
@@ -266,8 +266,8 @@ int view_message( int file_number ){
 
     char buffer2[BUFFER_SIZE];
     sprintf(buffer2, "+OK %d octets\r\n", file->size);
-    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, buffer2, strlen(buffer2));
-    send(pop3->cli_socket, buffer2, strlen(buffer2), 0);
+    write_socket_buffer(cli_data->send_buffer, cli_data->pop3->cli_socket, buffer2, strlen(buffer2));
+    //sendpop3->cli_socket, buffer2, strlen(buffer2), 0);
 
     sprintf(buffer, "%s%s/%s/%s", pop3->base_dir, cli_data->user->name, dir == NEW ? "new" : dir == CUR ? "cur" : "tmp", file->name);
 
@@ -400,13 +400,13 @@ int delete_message(int file_number){
 
     if ( file_number < 1 ){
         char* response = "-ERR Invalid message number\r\n";
-        // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-        send(pop3->cli_socket, response, strlen(response), 0);
+        write_socket_buffer(cli_data->send_buffer, cli_data->pop3->cli_socket, response, strlen(response));
+        //sendpop3->cli_socket, response, strlen(response), 0);
         return 1;
     }else if ( file_number > pop3->maildir->new->size + pop3->maildir->cur->size + pop3->maildir->tmp->size ){
         char* response = "-ERR Message not found\r\n";
-        // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-        send(pop3->cli_socket, response, strlen(response), 0);
+        write_socket_buffer(cli_data->send_buffer, cli_data->pop3->cli_socket, response, strlen(response));
+        //sendpop3->cli_socket, response, strlen(response), 0);
         return 1;
     }else if ( file_number <= pop3->maildir->new->size ){
         
@@ -422,8 +422,8 @@ int delete_message(int file_number){
 
     char* response = malloc(sizeof(char)*BUFFER_SIZE);
     sprintf(response,"+OK message %d deleted\r\n", file_number);
-    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-    send(pop3->cli_socket, response, strlen(response), 0);
+    write_socket_buffer(cli_data->send_buffer, cli_data->pop3->cli_socket, response, strlen(response));
+    //sendpop3->cli_socket, response, strlen(response), 0);
 
     return 0;
 }
@@ -611,46 +611,46 @@ void handle_client(Client_data* client_data ) {
             }
             if ( buffer_read( b ) == '\0' ){
                 response = "-ERR Missing username\r\n";
-                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                send(pop3->cli_socket, response, strlen(response), 0);
+                write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                //sendpop3->cli_socket, response, strlen(response), 0);
             } else {
                 if ( client_validation( b, client_data ) ){
                     response = "-ERR User not found\r\n";
-                    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                    send(pop3->cli_socket, response, strlen(response), 0);
+                    write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                    //sendpop3->cli_socket, response, strlen(response), 0);
                 } else {
                     response = "+OK User accepted, password needed\r\n";
-                    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                    send(pop3->cli_socket, response, strlen(response), 0);
+                    write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                    //sendpop3->cli_socket, response, strlen(response), 0);
                 }
             }
             break;
         case PASS:
             if ( client_data->client_state != AUTHORIZATION ){
                 response = "-ERR You had already logged on\r\n";
-                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                send(pop3->cli_socket, response, strlen(response), 0);
+                write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                //sendpop3->cli_socket, response, strlen(response), 0);
                 break;
             }
             if ( buffer_read( b ) == '\0' ){
                 response = "-ERR Missing password\r\n";
-                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                send(pop3->cli_socket, response, strlen(response), 0);
+                write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                //sendpop3->cli_socket, response, strlen(response), 0);
                 break;
             } else {
                 if ( password_validation( b, client_data ) ){
                     response = "-ERR Password incorrect\r\n";
-                    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                    send(pop3->cli_socket, response, strlen(response), 0);
+                    write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                    //sendpop3->cli_socket, response, strlen(response), 0);
                 } else {
                     response = "+OK Password accepted\r\n";
-                    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                    send(pop3->cli_socket, response, strlen(response), 0);
+                    write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                    //sendpop3->cli_socket, response, strlen(response), 0);
                     client_data->client_state = TRANSACTION;
                     if ( load_user_structure() ){
                         response = "-ERR Error loading user structure\r\n";
-                        // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                        send(pop3->cli_socket, response, strlen(response), 0);
+                        write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                        //sendpop3->cli_socket, response, strlen(response), 0);
                     }
                 }
             }
@@ -658,8 +658,8 @@ void handle_client(Client_data* client_data ) {
         case RSET:
             if ( client_data->client_state != TRANSACTION ){
                 response = "-ERR You must log in first\r\n";
-                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                send(pop3->cli_socket, response, strlen(response), 0);
+                write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                //sendpop3->cli_socket, response, strlen(response), 0);
                 break;
             }
             unmark_all();
@@ -667,8 +667,8 @@ void handle_client(Client_data* client_data ) {
         case STAT:
             if ( client_data->client_state != TRANSACTION ){
                 response = "-ERR You must log in first\r\n";
-                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                send(pop3->cli_socket, response, strlen(response), 0);
+                write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                //sendpop3->cli_socket, response, strlen(response), 0);
                 break;
             }
             stat_handeler();
@@ -676,8 +676,8 @@ void handle_client(Client_data* client_data ) {
         case LIST:
             if ( client_data->client_state != TRANSACTION ){
                 response = "-ERR You must log in first\r\n";
-                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                send(pop3->cli_socket, response, strlen(response), 0);
+                write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                //sendpop3->cli_socket, response, strlen(response), 0);
                 break;
             }
             if ( buffer_read( b ) == '\0' ){
@@ -687,8 +687,8 @@ void handle_client(Client_data* client_data ) {
                 int num = parse_number( b );
                 if ( num == 0 ){
                     response = "-ERR Argument Error \r\n";
-                    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                    send(pop3->cli_socket, response, strlen(response), 0);
+                    write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                    //sendpop3->cli_socket, response, strlen(response), 0);
                     break;
                 }
                 list_messages(num);
@@ -697,22 +697,22 @@ void handle_client(Client_data* client_data ) {
         case RETR:
             if ( client_data->client_state != TRANSACTION ){
                 response = "-ERR You must log in first\r\n";
-                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                send(pop3->cli_socket, response, strlen(response), 0);
+                write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                //sendpop3->cli_socket, response, strlen(response), 0);
                 break;
             }
             if ( buffer_read( b ) == '\0' ){
                 response = "-ERR Argument Error \r\n";
-                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                send(pop3->cli_socket, response, strlen(response), 0);
+                write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                //sendpop3->cli_socket, response, strlen(response), 0);
                 break;
             } else {
                 // parseo el numero 
                 int num = parse_number( b );
                 if ( num == 0 ){
                     response = "-ERR Argument Error \r\n";
-                    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                    send(pop3->cli_socket, response, strlen(response), 0);
+                    write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                    //sendpop3->cli_socket, response, strlen(response), 0);
                     break;
                 }
                 view_message(num);
@@ -721,22 +721,22 @@ void handle_client(Client_data* client_data ) {
         case DELE:
             if ( client_data->client_state != TRANSACTION ){
                 response = "-ERR You must log in first\r\n";
-                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                send(pop3->cli_socket, response, strlen(response), 0);
+                write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                //sendpop3->cli_socket, response, strlen(response), 0);
                 break;
             }
             if ( buffer_read( b ) == '\0' ){
                 response = "-ERR Argument Error \r\n";
-                // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                send(pop3->cli_socket, response, strlen(response), 0);
+                write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                //sendpop3->cli_socket, response, strlen(response), 0);
                 break;
             } else {
                 // parseo el numero 
                 int num = parse_number( b );
                 if ( num == 0 ){
                     response = "-ERR Argument Error \r\n";
-                    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-                    send(pop3->cli_socket, response, strlen(response), 0);
+                    write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+                    //sendpop3->cli_socket, response, strlen(response), 0);
                     break;
                 }
                 // marca como borrado el mensaje
@@ -746,13 +746,13 @@ void handle_client(Client_data* client_data ) {
         case NOOP:
             // Retorna un OK!, no hace nada
             response = "OK!!\r\n";
-            // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-            send(pop3->cli_socket, response, strlen(response), 0);
+            write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+            //sendpop3->cli_socket, response, strlen(response), 0);
             break;
         case QUIT:
             response = "+OK Goodbye\r\n";
-            // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-            send(pop3->cli_socket, response, strlen(response), 0);
+            write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+            //sendpop3->cli_socket, response, strlen(response), 0);
             client_data->client_state = CLOSING;
             //delete_marked();
             //destroy_maildir();
@@ -761,8 +761,8 @@ void handle_client(Client_data* client_data ) {
             goto end;
         default:
             response = "-ERR Unknown command\r\n";
-            // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
-            send(pop3->cli_socket, response, strlen(response), 0);
+            write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
+            //sendpop3->cli_socket, response, strlen(response), 0);
             buffer_compact(b);
     }
     buffer_compact(b); // reinicio el buffer para que no haya problemas
