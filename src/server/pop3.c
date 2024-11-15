@@ -51,7 +51,49 @@ int amount_mails( file_list_header* list ){
     return i;
 }
 
+int read_socket_buffer(char *recv_buffer, int socket_fd, size_t buffer_size) {
+    ssize_t bytes_read = recv(socket_fd, recv_buffer, buffer_size - 1, 0);
 
+    if (bytes_read > 0) {
+        recv_buffer[bytes_read] = '\0';
+        return bytes_read;
+    } else if (bytes_read == 0) {
+        fprintf(stderr, "Connection closed by peer.\n");
+        return 0;
+    } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        return -1;
+    } else {
+        perror("recv failed");
+        return -2;
+    }
+}
+
+int write_socket_buffer(char *send_buffer, int socket_fd, const char *data, size_t data_len) {
+    size_t total_sent = 0;
+    ssize_t bytes_sent = 0;
+
+    while (total_sent < data_len) {
+        size_t remaining_data = data_len - total_sent;
+        ssize_t to_copy = remaining_data < BUFFER_SIZE ? remaining_data : BUFFER_SIZE;
+
+        memcpy(send_buffer, data + total_sent, to_copy);
+        while ((bytes_sent = send(socket_fd, send_buffer, to_copy, 0)) < to_copy) {
+            if (bytes_sent < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    continue;
+                } else {
+                    perror("send failed");
+                    return -1;
+                }
+            }
+            to_copy -= bytes_sent;
+        }
+
+        total_sent += bytes_sent;
+    }
+
+    return total_sent;
+}
 
 int stat_handeler(){
     
@@ -539,8 +581,8 @@ void handle_client(Client_data* client_data ) {
     cli_data = client_data;
 
     char* response;
-    // bytes_read = read_socket_buffer(buffer1, client_data->pop3->cli_socket, BUFFER_SIZE);
-    bytes_received = recv(pop3->cli_socket, buffer1, BUFFER_SIZE, 0);
+    bytes_received = read_socket_buffer(buffer1, client_data->pop3->cli_socket, BUFFER_SIZE);
+    //bytes_received = recv(pop3->cli_socket, buffer1, BUFFER_SIZE, 0);
     // checkeo si se desconecto o hubo un error
     if (bytes_received <= 0) {
         // Error o desconexión del cliente
@@ -712,8 +754,8 @@ void handle_client(Client_data* client_data ) {
             // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, response, strlen(response));
             send(pop3->cli_socket, response, strlen(response), 0);
             client_data->client_state = CLOSING;
-            delete_marked();
-            destroy_maildir();
+            //delete_marked();
+            //destroy_maildir();
             printf("Client disconnected.\n");
             close(pop3->cli_socket);
             goto end;

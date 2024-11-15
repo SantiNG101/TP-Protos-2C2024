@@ -30,21 +30,21 @@ void init_pollfds() {
     }
 }
 
-void init_clientData( pop3_structure* pop3_struct ) {
+void init_clientData() {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         clients[i].client_state = AUTHORIZATION;
-        clients[i].pop3 = pop3_struct;
+        clients[i].pop3 = calloc(1, sizeof(pop3_structure));
+        clients[i].pop3->user_list = NULL;
+        clients[i].pop3->maildir = NULL;
         clients[i].user = NULL;
     }
 }
 
 int add_client(int client_fd) {
-    for (int i = 1; i <= MAX_CLIENTS; i++) {
-        if (pollfds[i].fd == -1) {
-            pollfds[i].fd = client_fd;
-            pollfds[i].events = POLLIN;
-            return 0;
-        }
+    if(client_count < MAX_CLIENTS + 1){
+        pollfds[client_count+1].fd = client_fd;
+        pollfds[client_count+1].events = POLLIN;
+        return 0;
     }
     return -1;
 }
@@ -71,6 +71,13 @@ int main( const int argc, char **argv ) {
         exit(EXIT_FAILURE);
     }
 
+    opt = 1;
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt(SO_REUSEADDR) failed");
+        close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin6_family = AF_INET6;
     server_addr.sin6_addr = in6addr_any; 
@@ -90,7 +97,7 @@ int main( const int argc, char **argv ) {
     printf("Server started on port %d, accepting IPv4 and IPv6 connections...\n", pop3_struct->port);
 
     init_pollfds();
-    init_clientData(pop3_struct);
+    init_clientData();
 
     pollfds[0].fd = server_socket;
     pollfds[0].events = POLLIN;
@@ -118,15 +125,19 @@ int main( const int argc, char **argv ) {
                             printf("Too many clients\n");
                             close(client_socket);
                         } else {
-                            client_count++;
                             printf("Client connected.\n");
+                            clients[client_count].pop3->cli_socket = client_socket;
+                            write_socket_buffer(clients[client_count].send_buffer, clients[client_count].pop3->cli_socket, "+OK POP3 server ready\r\n", 23);
+                            client_count++;
                         }
                     }
                 } else {
-                    clients[i].pop3->cli_socket = pollfds[i].fd;
-                    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, "+OK POP3 server ready\r\n", 23);
-                    send(clients[i].pop3->cli_socket, "+OK POP3 server ready\r\n", 23, 0);
-                    handle_client(&clients[i]);
+                    handle_client(&clients[i-1]);
+                    if(clients[i-1].client_state == ERROR_CLIENT || clients[i-1].client_state == CLOSING){
+                        close(pollfds[i].fd);
+                        pollfds[i].fd = -1;
+                        pollfds[i].events = POLLIN;
+                    }
                 }
             }
         }

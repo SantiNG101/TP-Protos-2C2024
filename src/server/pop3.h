@@ -124,5 +124,8 @@ typedef struct Client_data {
 void handle_client(Client_data* client_data);
 void free_pop3_structure( pop3_structure* pop3_struct );
 
+int read_socket_buffer(char *recv_buffer, int socket_fd, size_t buffer_size);
+
+int write_socket_buffer(char *send_buffer, int socket_fd, const char *data, size_t data_len);
 
 #endif
