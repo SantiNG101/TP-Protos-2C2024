@@ -140,12 +140,12 @@ parse_args(const int argc, char **argv, pop3_structure *args) {
     args->user_list = calloc(1, sizeof(user_list_header));
     args->base_dir = "./src/root/";
     args->host = "localhost";
-    args->ip = "127.0.0.1";
+    args->ip = "::1";
     args->port = DEFAULT_PORT;
     // para analisis de trafico
     args->disectors_enabled = false;
     args->mng_port = DEFAULT_MGMT_PORT;
-    args->mng_ip = "127.0.0.1";
+    args->mng_ip = "::1";
     args->mng_socket = 0;
 
     int c;
@@ -208,7 +208,7 @@ parse_args(const int argc, char **argv, pop3_structure *args) {
                 // asigno devuelta por si los cambiaron
                 args->base_dir = "./src/root/";
                 args->host = "localhost";
-                args->ip = "127.0.0.1";
+                args->ip = "::1";
                 args->port = DEFAULT_PORT;
                 return;
             case 0xD001:

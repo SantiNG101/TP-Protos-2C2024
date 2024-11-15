@@ -124,7 +124,7 @@ typedef struct Client_data {
     enum client_state client_state;
 } Client_data;
 
-void handle_client(int client_socket, user_list_header* user_list, Client_data* client_data);
+void handle_client(Client_data* client_data);
 void free_pop3_structure( pop3_structure* pop3_struct );
 
 

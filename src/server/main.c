@@ -52,14 +52,17 @@ int add_client(int client_fd) {
 int main( const int argc, char **argv ) {
     int server_socket;
     struct sockaddr_in6 server_addr;
+    pop3_structure* pop3_struct = calloc(1, sizeof(pop3_structure));
 
     // arguments
+    parse_args(argc, argv, pop3_struct);
 
     server_socket = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (server_socket == -1) {
         perror("Socket creation failed");
         exit(EXIT_FAILURE);
     }
+    pop3_struct->server_socket = server_socket;
 
     int opt = 0;
     if (setsockopt(server_socket, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt)) < 0) {
@@ -71,7 +74,7 @@ int main( const int argc, char **argv ) {
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin6_family = AF_INET6;
     server_addr.sin6_addr = in6addr_any; 
-    server_addr.sin6_port = htons(PORT);
+    server_addr.sin6_port = htons(pop3_struct->port);
 
     if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("Binding failed");
@@ -84,10 +87,10 @@ int main( const int argc, char **argv ) {
         close(server_socket);
         exit(EXIT_FAILURE);
     }
-    printf("Server started on port %d, accepting IPv4 and IPv6 connections...\n", PORT);
+    printf("Server started on port %d, accepting IPv4 and IPv6 connections...\n", pop3_struct->port);
 
     init_pollfds();
-    init_clientData();
+    init_clientData(pop3_struct);
 
     pollfds[0].fd = server_socket;
     pollfds[0].events = POLLIN;
@@ -120,11 +123,15 @@ int main( const int argc, char **argv ) {
                         }
                     }
                 } else {
-                    handle_client(pollfds[i].fd, NULL, &clients[i]);
+                    clients[i].pop3->cli_socket = pollfds[i].fd;
+                    // write_socket_buffer(client_data->send_buffer, client_data->pop3->cli_socket, "+OK POP3 server ready\r\n", 23);
+                    send(clients[i].pop3->cli_socket, "+OK POP3 server ready\r\n", 23, 0);
+                    handle_client(&clients[i]);
                 }
             }
         }
     }
+
     free_pop3_structure(pop3_struct);
     free(pop3_struct);
     close(server_socket);
