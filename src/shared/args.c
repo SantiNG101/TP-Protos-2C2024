@@ -113,20 +113,21 @@ usage(const char *progname) {
     fprintf(stderr,
             "Usage: %s [OPTION]...\n"
             "\n"
-            "   -h               Imprime la ayuda y termina.\n"
-            "   -l <POP3 addr>   Dirección donde servirá el servidor POP.\n"
-            "   --ip <ip>        Dirección IP donde servirá el servidor POP.\n"
-            "   -L <conf  addr>  Dirección donde servirá el servicio de management.\n"
-            "   -p <POP3 port>   Puerto entrante conexiones POP3.\n"
-            "   --port <port>    Puerto entrante conexiones POP3.\n"
-            "   -P <conf port>   Puerto entrante conexiones configuracion\n"
-            "   -u <name>:<pass> Usuario y contraseña de usuario que puede usar el servidor. Hasta 10.\n"
-            "   -v               Imprime información sobre la versión versión y termina.\n"
-            "   -d               Carpeta donde residen los Maildirs\n"
-            "   --path <path>       Carpeta donde residen los Maildirs\n"
-            "   -N               Más estadisticas sobre el server\n"
-            "   --default        Utiliza los defaults de usuarios y configuración. \n"
-            "--host <host>       Hostname del servidor.\n"
+            "   -h                   Imprime la ayuda y termina.\n"
+            "   -l <POP3 addr>       Dirección donde servirá el servidor POP.\n"
+            "   --ip <ip>            Dirección IP donde servirá el servidor POP.\n"
+            "   -L <conf  addr>      Dirección donde servirá el servicio de management.\n"
+            "   -p <POP3 port>       Puerto entrante conexiones POP3.\n"
+            "   --port <port>        Puerto entrante conexiones POP3.\n"
+            "   -P <conf port>       Puerto entrante conexiones configuracion\n"
+            "   -u <name>:<pass>     Usuario y contraseña de usuario que puede usar el servidor. Hasta 10.\n"
+            "   -v                   Imprime información sobre la versión versión y termina.\n"
+            "   -d                   Carpeta donde residen los Maildirs\n"
+            "   --path <path>        Carpeta donde residen los Maildirs\n"
+            "   -N                   Más estadisticas sobre el server\n"
+            "   --default            Utiliza los defaults de usuarios y configuración. \n"
+            "--host <host>           Hostname del servidor.\n"
+            "-T <path to the binary> Camino hasta el binario que va a realizar la transformacion.\n"
             "\n",
             progname);
     exit(1);
@@ -142,6 +143,7 @@ parse_args(const int argc, char **argv, pop3_structure *args) {
     args->host = "localhost";
     args->ip = "::1";
     args->port = DEFAULT_PORT;
+    args->trans_enabled = false;
     // para analisis de trafico
     args->disectors_enabled = false;
     args->mng_port = DEFAULT_MGMT_PORT;
@@ -187,6 +189,13 @@ parse_args(const int argc, char **argv, pop3_structure *args) {
                 break;
             case 'P':
                 args->mng_port = port(optarg);
+                break;
+            case 'T':
+                args->trans = calloc(1, sizeof(transformation_structure));
+                args->trans_enabled = true;
+                // separo el binario de los argumentos
+                args->trans->trans_binary_path = optarg;
+                args->trans->trans_args = argv[optind];
                 break;
             case 'u':
                 if(nusers >= MAX_USERS) {

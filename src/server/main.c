@@ -99,6 +99,48 @@ int main( const int argc, char **argv ) {
     init_pollfds();
     init_clientData();
 
+    // creo el programa de traduccion
+    if ( pop3_struct->trans_enabled ){
+        int fd[2];
+        // Crear el pipe
+        if (pipe(fd) == -1) {
+            perror("pipe");
+            exit(EXIT_FAILURE);
+        }
+
+        pop3_struct->trans->trans_in = fd[0];
+        pop3_struct->trans->trans_out = fd[1];
+
+        // Crear un nuevo proceso
+        pid = fork();
+
+        if (pid < 0) {
+            perror("fork");
+            exit(EXIT_FAILURE);
+        }
+
+        if (pid == 0) {
+            // proceso hijo
+            // Cerrar el descriptor de lectura
+            close(0);
+            close(1);
+            // Redirigir la salida estandar al pipe
+            dup2(fd[0], STDIN_FILENO);
+            dup2(fd[1], STDOUT_FILENO);
+
+            close(fd[0]);
+            close(fd[1]);
+
+            // Ejecutar el programa de traduccion
+            execve(pop3_struct->trans->trans_binary_path, &pop3_struct->trans->trans_args, NULL);
+            perror("execve");
+            exit(EXIT_FAILURE);
+        }
+
+    }
+
+
+
     pollfds[0].fd = server_socket;
     pollfds[0].events = POLLIN;
 

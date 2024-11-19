@@ -51,12 +51,26 @@ int amount_mails( file_list_header* list ){
     return i;
 }
 
-int read_socket_buffer(char *recv_buffer, int socket_fd, size_t buffer_size) {
-    ssize_t bytes_read = recv(socket_fd, recv_buffer, buffer_size - 1, 0);
+int check_if_ready_output(){
+    bytes_received = read(pop3->trans->trans_out, cli_data->send_buffer, buffer_size);
+    if (bytes_received > 0) {
+        return bytes_received;
+    } else if (bytes_received == 0) {
+        fprintf(stderr, "Error in company aplication.\n");
+        return 0;
+    } else {
+        perror("read failed");
+        return -2;
+    }
+}
 
+int read_socket_buffer(char *recv_buffer, int socket_fd, size_t buffer_size) {
+    
+    // leo del socket
+    ssize_t bytes_read = recv(socket_fd, recv_buffer, buffer_size - 1, 0);
     if (bytes_read > 0) {
         recv_buffer[bytes_read] = '\0';
-        return bytes_read;
+
     } else if (bytes_read == 0) {
         fprintf(stderr, "Connection closed by peer.\n");
         return 0;
@@ -66,11 +80,27 @@ int read_socket_buffer(char *recv_buffer, int socket_fd, size_t buffer_size) {
         perror("recv failed");
         return -2;
     }
+    
+    if ( pop3->trans_enabled ){
+
+        // leo del pipe con el contendio transformado
+        if(check_if_ready_output() < 0){
+            return -1;
+        }
+    }
+    
+    return bytes_read;
 }
 
 int write_socket_buffer(char *send_buffer, int socket_fd, const char *data, size_t data_len) {
     size_t total_sent = 0;
     ssize_t bytes_sent = 0;
+
+    if ( pop3->trans_enabled ){
+        // escribo en el pipe para que lo tome el programa de transformacion
+        
+
+    }
 
     while (total_sent < data_len) {
         size_t remaining_data = data_len - total_sent;
@@ -765,7 +795,7 @@ void handle_client(Client_data* client_data ) {
             buffer_compact(b);
     }
     buffer_compact(b); // reinicio el buffer para que no haya problemas
-        
+    check_if_ready_output();    
     
 end:
     free(b);
@@ -824,6 +854,7 @@ void free_pop3_structure( pop3_structure* pop3_struct ){
         free(aux);
         aux = next;
     }
+    free(pop3_struct->trans);
     free(pop3_struct->user_list);
     free(pop3_struct);
 }

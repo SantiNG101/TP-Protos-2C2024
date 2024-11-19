@@ -87,10 +87,19 @@ typedef struct maildir {
     file_list_header* new;
     file_list_header* tmp;
 } maildir;
+typedef struct transformation_structure {  
+    char* trans_binary_path;
+    char* trans_args;
+    int trans_in;
+    int trans_out;
+    char send_trans_buffer[BUFFER_SIZE];
+}transformation_structure;
 
 typedef struct pop3_structure {
     user_list_header* user_list;
     maildir* maildir;
+    bool trans_enabled;
+    transformation_structure* trans;
     char* base_dir;
     char* host;
     char* ip;
