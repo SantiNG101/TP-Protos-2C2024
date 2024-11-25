@@ -56,18 +56,18 @@ char** strsep( char* str, char delim ) {
 
 void split_t_arg( char* original, char** path, char** right_hand_arg){
     int i = 0;
-
-    while (original[i] != ' ' && original[i] != '\0') {
+    printf("original: %s\n", original);
+    while (original[i] != ':' && original[i] != '\0') {
         i++;
     }
 
-    path = calloc(i + 1, sizeof(char));
+    *path = calloc(i + 1, sizeof(char));
     snprintf(*path, i + 1, "%s", original);
 
     int len = strlen(original + i + 1);
-    right_hand_arg = calloc(len + 1, sizeof(char));
+    *right_hand_arg = calloc(len + 1, sizeof(char));
 
-    if (original[i] == ' ') {
+    if (original[i] == ':') {
         snprintf(*right_hand_arg, len + 1, "%s", original + i + 1);
     } else {
         right_hand_arg[0] = '\0';
@@ -183,7 +183,7 @@ parse_args(const int argc, char **argv, pop3_structure *args) {
             { 0,           0,                 0, 0 }
         };
 
-        c = getopt_long(argc, argv, "hl:L:Np:P:u:v", long_options, &option_index);
+        c = getopt_long(argc, argv, "hl:L:N:P:u:v:T:d:p:N", long_options, &option_index);
         if (c == -1)
             break;
 
@@ -241,8 +241,9 @@ parse_args(const int argc, char **argv, pop3_structure *args) {
                 args->base_dir = "./src/root/";
                 args->host = "localhost";
                 args->ip = "::1";
+                args->trans_enabled = false;
                 args->port = DEFAULT_PORT;
-                return;
+                break;
             case 0xD001:
                 args->ip = optarg;
                 break;

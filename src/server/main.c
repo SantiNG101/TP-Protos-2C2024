@@ -121,6 +121,7 @@ int main( const int argc, char **argv ) {
 
         pop3_struct->trans->trans_in = fd[0];
         pop3_struct->trans->trans_out = fd[1];
+        char* argv[] = {pop3_struct->trans->trans_binary_path, pop3_struct->trans->trans_args, NULL }; 
 
         // Crear un nuevo proceso
         int pid = fork();
@@ -143,7 +144,7 @@ int main( const int argc, char **argv ) {
             close(fd[1]);
 
             // Ejecutar el programa de traduccion
-            execve(pop3_struct->trans->trans_binary_path, &pop3_struct->trans->trans_args, NULL);
+            execve(pop3_struct->trans->trans_binary_path, argv, NULL);
             perror("execve");
             exit(EXIT_FAILURE);
         }

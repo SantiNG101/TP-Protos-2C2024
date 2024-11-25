@@ -216,7 +216,7 @@ void send_file(const char *filename) {
 
             FD_SET(cli_data->pop3->trans->trans_out, &writefds);
             FD_SET(cli_data->pop3->trans->trans_in, &readfds);
-            int activity = select(2 + 1, &readfds, &writefds, NULL, NULL);
+            int activity = select((cli_data->pop3->trans->trans_out > cli_data->pop3->trans->trans_in? cli_data->pop3->trans->trans_out: cli_data->pop3->trans->trans_in) + 1, &readfds, &writefds, NULL, NULL);
             if (activity < 0) {
                 perror("Error en select");
                 exit(1);
@@ -234,7 +234,8 @@ void send_file(const char *filename) {
                 buffer_write_adv(state_buffer, bytes_read);
                 // escribo pipe
                 if (buffer_can_read(state_buffer) && FD_ISSET(cli_data->pop3->trans->trans_in, &readfds)) {
-                    write(cli_data->pop3->trans->trans_out, buff, state_buffer->write - state_buffer->read); // mando todo lo que tenga por mandar
+                    bytes_sent = write(cli_data->pop3->trans->trans_out, buff, state_buffer->write - state_buffer->read); // mando todo lo que tenga por mandar
+                    buffer_read_adv(state_buffer, bytes_sent);
                 }
             }
 
@@ -289,7 +290,7 @@ void check_if_ready_output(){
     fd_set writefds;
     FD_ZERO(&writefds);
     FD_SET(cli_data->pop3->trans->trans_out, &writefds);
-    int activity = select(1 + 1,NULL, &writefds, NULL, NULL);
+    int activity = select(cli_data->pop3->trans->trans_out + 1,NULL, &writefds, NULL, NULL);
     if (activity < 0) {
         perror("Error en select");
         exit(1);
