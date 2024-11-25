@@ -123,14 +123,12 @@ int stat_handeler(){
     if ( response == NULL ){
         return 1;
     }
-    sprintf(response, "+OK %d messags (%d octets)\r\n", total_messages, total_bytes);
+    sprintf(response, "+OK %d messages (%d octets)\r\n", total_messages, total_bytes);
     write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, response, strlen(response));
     // send(cli_socket, response, strlen(response), 0);
     free(response);
     return 0;
 }
-
-
 
 void list_directory(file_list_header* header, int* index, char* buffer) {
     int bytes_written = 0;
@@ -233,6 +231,7 @@ void send_file(const char *filename) {
                     no_finito = false;
                     continue;
                 }
+                buffer_write_adv(state_buffer, bytes_read);
                 // escribo pipe
                 if (buffer_can_read(state_buffer) && FD_ISSET(cli_data->pop3->trans->trans_in, &readfds)) {
                     write(cli_data->pop3->trans->trans_out, buff, state_buffer->write - state_buffer->read); // mando todo lo que tenga por mandar
@@ -410,7 +409,7 @@ void delete_marked(){
     while ( aux != NULL ){
         if ( aux->deleted ){
             sprintf(path, "%s%s/%s/%s", pop3->base_dir, cli_data->user->name, "new", aux->name);
-            if (!remove( path )){
+            if (remove( path ) == -1){
                 perror("Error al borrar archivo");
             }
             // libero la memoria de la lista del archivo
@@ -434,7 +433,7 @@ void delete_marked(){
     while ( aux != NULL ){
         if ( aux->deleted ){
             sprintf(path, "%s%s/%s/%s", pop3->base_dir, cli_data->user->name, "cur", aux->name);
-            if (!remove( path )){
+            if (remove( path ) == -1){
                 perror("Error al borrar archivo");
             }
             // libero la memoria de la lista del archivo
@@ -457,7 +456,7 @@ void delete_marked(){
     while ( aux != NULL ){
         if ( aux->deleted ){
             sprintf(path, "%s%s/%s/%s", pop3->base_dir, cli_data->user->name, "tmp", aux->name);
-            if (!remove( path )){
+            if (remove( path ) == -1){
                 perror("Error al borrar archivo");
             }
             // libero la memoria de la lista del archivo
@@ -600,7 +599,7 @@ int load_user_structure(){
 
     char user_path[BUFFER_SIZE];
 
-    sprintf(user_path, "%s%s/", pop3->base_dir, cli_data->user->name);
+    sprintf(user_path, "%s%s", pop3->base_dir, cli_data->user->name);
 
     char new_path[PATH_MAX];
     char cur_path[PATH_MAX];
@@ -848,15 +847,13 @@ void handle_client(Client_data* client_data ) {
             write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
             //sendcli_socket, response, strlen(response), 0);
             client_data->client_state = CLOSING;
-            //delete_marked();
-            //destroy_maildir();
+            delete_marked();
             printf("Client disconnected.\n");
             close(client_data->cli_socket);
             goto end;
         default:
             response = "-ERR Unknown command\r\n";
             write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-            //sendcli_socket, response, strlen(response), 0);
             buffer_compact(b);
     }
     buffer_compact(b); // reinicio el buffer para que no haya problemas
@@ -916,6 +913,8 @@ void free_pop3_structure( pop3_structure* pop3_struct ){
     user_list* aux = pop3_struct->user_list->list;
     while ( aux != NULL ){
         user_list* next = aux->next;
+        free(aux->name);
+        free(aux->pass);
         free(aux);
         aux = next;
     }

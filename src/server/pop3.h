@@ -138,4 +138,6 @@ int read_socket_buffer(char *recv_buffer, int socket_fd, size_t buffer_size);
 
 int write_socket_buffer(char *send_buffer, int socket_fd, const char *data, size_t data_len);
 
+int destroy_maildir();
+
 #endif
