@@ -20,6 +20,7 @@
 #include <dirent.h>
 #include <sys/poll.h>
 #include <fcntl.h>
+#include <sys/select.h>
 
 #include "../shared/buffer.h"
 
