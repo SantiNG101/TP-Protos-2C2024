@@ -65,7 +65,7 @@ int main( const int argc, char **argv ) {
     int server_socket;
     struct sockaddr_in6 server_addr;
     pop3_structure* pop3_struct = calloc(1, sizeof(pop3_structure));
-
+    signal(SIGINT, sigterm_handler);
     // arguments
     parse_args(argc, argv, pop3_struct);
 
