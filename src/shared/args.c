@@ -211,6 +211,11 @@ parse_args(const int argc, char **argv, pop3_structure *args) {
                 args->mng_port = port(optarg);
                 break;
             case 'T':
+                if(optarg == NULL){
+                    fprintf(stderr, "no binary path provided.\n");
+                    exit(1);
+                }
+
                 args->trans = calloc(1, sizeof(transformation_structure));
                 args->trans_enabled = true;
 
