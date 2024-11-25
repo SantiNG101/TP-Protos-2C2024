@@ -36,7 +36,7 @@ int add_client(int client_fd, pop3_structure* pop3_struct) {
         pollfds[client_count+1].events = POLLIN;
 
         clients[client_count].client_state = AUTHORIZATION;
-        clients[client_count].pop3 = pop3_struct;
+        clients[client_count].pop3 = calloc(1, sizeof(pop3_structure));
         clients[client_count].user = NULL;
         return 0;
     }
@@ -50,8 +50,6 @@ int handle_close_client(int index) {
 
     pollfds[client_count].fd = -1;
     pollfds[client_count].events = POLLIN;
-
-    free_pop3_structure(clients[index].pop3);
 
     clients[index] = clients[client_count-1];
 
@@ -127,7 +125,7 @@ int main( const int argc, char **argv ) {
         pop3_struct->trans->trans_out = fd[1];
 
         // Crear un nuevo proceso
-        pid = fork();
+        int pid = fork();
 
         if (pid < 0) {
             perror("fork");
