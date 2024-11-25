@@ -106,7 +106,6 @@ typedef struct pop3_structure {
     char* ip;
     int port;
     int server_socket;
-    int cli_socket;
     // para analisis de trafico
     bool disectors_enabled;
     int mng_port;
@@ -122,6 +121,7 @@ enum client_state {
 };
 
 typedef struct Client_data {
+    int cli_socket;
     struct pop3_structure* pop3;
     user_list* user;
 

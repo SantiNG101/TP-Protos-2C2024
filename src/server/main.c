@@ -51,9 +51,9 @@ int handle_close_client(int index) {
     pollfds[client_count].fd = -1;
     pollfds[client_count].events = POLLIN;
 
-    clients[index] = clients[client_count-1];
+    clients[index-1] = clients[client_count-1];
 
-    clients[client_count-1].pop3->cli_socket = -1;
+    clients[client_count-1].cli_socket = -1;
     clients[client_count-1].client_state = -1;
     clients[client_count-1].user = NULL;
     clients[client_count-1].pop3->user_list = NULL;
@@ -180,15 +180,15 @@ int main( const int argc, char **argv ) {
                             close(client_socket);
                         } else {
                             printf("Client connected.\n");
-                            clients[client_count].pop3->cli_socket = client_socket;
-                            write_socket_buffer(clients[client_count].send_buffer, clients[client_count].pop3->cli_socket, "+OK POP3 server ready\r\n", 23);
+                            clients[client_count].cli_socket = client_socket;
+                            write_socket_buffer(clients[client_count].send_buffer, clients[client_count].cli_socket, "+OK POP3 server ready\r\n", 23);
                             client_count++;
                         }
                     }
                 } else {
                     handle_client(&clients[i-1]);
                     if(clients[i-1].client_state == ERROR_CLIENT || clients[i-1].client_state == CLOSING){
-                        handle_close_client(i);
+                        handle_close_client(i--);
                     }
                 }
             }
