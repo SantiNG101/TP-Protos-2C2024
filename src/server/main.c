@@ -193,7 +193,6 @@ int main( const int argc, char **argv ) {
         }
     }
 
-    destroy_maildir();
     free_pop3_structure(pop3_struct);
     close(server_socket);
 

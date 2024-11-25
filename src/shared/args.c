@@ -157,7 +157,6 @@ void
 parse_args(const int argc, char **argv, pop3_structure *args) {
 
     // defaults
-    args->maildir = NULL;
     args->user_list = calloc(1, sizeof(user_list_header));
     args->base_dir = "./src/root/";
     args->host = "localhost";

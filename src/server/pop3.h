@@ -98,7 +98,6 @@ typedef struct transformation_structure {
 
 typedef struct pop3_structure {
     user_list_header* user_list;
-    maildir* maildir;
     bool trans_enabled;
     transformation_structure* trans;
     char* base_dir;
@@ -124,7 +123,8 @@ typedef struct Client_data {
     int cli_socket;
     struct pop3_structure* pop3;
     user_list* user;
-
+    maildir* maildir;
+    
     char send_buffer[BUFFER_SIZE];
     char recv_buffer[BUFFER_SIZE];
     

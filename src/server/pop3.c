@@ -102,22 +102,22 @@ int write_socket_buffer(char *send_buffer, int socket_fd, const char *data, size
 int stat_handeler(){
     
     int total_bytes = 0;
-    file_list* aux = pop3->maildir->new->list;
+    file_list* aux = cli_data->maildir->new->list;
     while( aux != NULL ){
         total_bytes += aux->size;
         aux = aux->next;
     }
-    aux = pop3->maildir->cur->list;
+    aux = cli_data->maildir->cur->list;
     while( aux != NULL ){
         total_bytes += aux->size;
         aux = aux->next;
     }
-    aux = pop3->maildir->tmp->list;
+    aux = cli_data->maildir->tmp->list;
     while( aux != NULL ){
         total_bytes += aux->size;
         aux = aux->next;
     }
-    int total_messages = pop3->maildir->new->size + pop3->maildir->cur->size + pop3->maildir->tmp->size;
+    int total_messages = cli_data->maildir->new->size + cli_data->maildir->cur->size + cli_data->maildir->tmp->size;
 
     char* response = calloc(1, sizeof(char)*BUFFER_SIZE);
     if ( response == NULL ){
@@ -149,9 +149,9 @@ int list_messages(int message_number) {
         int index = 1;
         stat_handeler();
         // List all messages in new, cur, and tmp
-        list_directory(pop3->maildir->new, &index, buffer);
-        list_directory(pop3->maildir->cur, &index, buffer);
-        list_directory(pop3->maildir->tmp, &index, buffer);
+        list_directory(cli_data->maildir->new, &index, buffer);
+        list_directory(cli_data->maildir->cur, &index, buffer);
+        list_directory(cli_data->maildir->tmp, &index, buffer);
 
         // Send end of list marker
         write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, ".\r\n", 3);
@@ -161,14 +161,14 @@ int list_messages(int message_number) {
         int remaining = message_number;
         file_list* current = NULL;
 
-        if (remaining <= pop3->maildir->new->size) { 
-            current = pop3->maildir->new->list;
-        } else if (remaining <= pop3->maildir->new->size + pop3->maildir->cur->size) {
-            remaining -= pop3->maildir->new->size;
-            current = pop3->maildir->cur->list;
-        } else if (remaining <= pop3->maildir->new->size + pop3->maildir->cur->size + pop3->maildir->tmp->size) {
-            remaining -= (pop3->maildir->new->size + pop3->maildir->cur->size);
-            current = pop3->maildir->tmp->list;
+        if (remaining <= cli_data->maildir->new->size) { 
+            current = cli_data->maildir->new->list;
+        } else if (remaining <= cli_data->maildir->new->size + cli_data->maildir->cur->size) {
+            remaining -= cli_data->maildir->new->size;
+            current = cli_data->maildir->cur->list;
+        } else if (remaining <= cli_data->maildir->new->size + cli_data->maildir->cur->size + cli_data->maildir->tmp->size) {
+            remaining -= (cli_data->maildir->new->size + cli_data->maildir->cur->size);
+            current = cli_data->maildir->tmp->list;
         } else {
             return -1; // Message number is out of range
         }
@@ -337,12 +337,12 @@ int view_message( int file_number ){
 
     // reccoro la lista buscando el archivo y obtengo el nombre con el numero
     char buffer[BUFFER_SIZE];
-    file_list * file = search_file( pop3->maildir->new, file_number );
+    file_list * file = search_file( cli_data->maildir->new, file_number );
     int dir = -1;
     if ( file == NULL ){
-        file = search_file( pop3->maildir->cur, file_number );
+        file = search_file( cli_data->maildir->cur, file_number );
         if ( file == NULL ){
-            file = search_file( pop3->maildir->tmp, file_number );
+            file = search_file( cli_data->maildir->tmp, file_number );
             if ( file == NULL ){
                 char* response = "-ERR Message not found\r\n";
                 write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, response, strlen(response));
@@ -370,7 +370,7 @@ int view_message( int file_number ){
 }
 
 void unmark_all(){
-    file_list* aux = pop3->maildir->new->list;
+    file_list* aux = cli_data->maildir->new->list;
     while ( aux != NULL ){
         if ( aux->deleted ){
             aux->deleted = false;
@@ -379,7 +379,7 @@ void unmark_all(){
         }
     }
 
-    aux = pop3->maildir->cur->list;
+    aux = cli_data->maildir->cur->list;
     while ( aux != NULL ){
         if ( aux->deleted ){
             aux->deleted = false;
@@ -388,7 +388,7 @@ void unmark_all(){
         }
     }
 
-    aux = pop3->maildir->tmp->list;
+    aux = cli_data->maildir->tmp->list;
     while ( aux != NULL ){
         if ( aux->deleted ){
             aux->deleted = false;
@@ -404,7 +404,7 @@ void unmark_all(){
 void delete_marked(){
     
     char* path = calloc(1, sizeof(char)*BUFFER_SIZE);
-    file_list* aux = pop3->maildir->new->list;
+    file_list* aux = cli_data->maildir->new->list;
     int i=0;
     while ( aux != NULL ){
         if ( aux->deleted ){
@@ -415,12 +415,12 @@ void delete_marked(){
             // libero la memoria de la lista del archivo
             file_list* next = aux->next;
             if ( i == 0 ){
-                pop3->maildir->new->list = aux->next;
+                cli_data->maildir->new->list = aux->next;
             }
             free(aux);
             aux = next;
 
-            pop3->maildir->new->size--;
+            cli_data->maildir->new->size--;
         }else{
             i++;
             aux = aux->next;
@@ -429,7 +429,7 @@ void delete_marked(){
 
     // reseteo
     i=0;
-    aux = pop3->maildir->cur->list;
+    aux = cli_data->maildir->cur->list;
     while ( aux != NULL ){
         if ( aux->deleted ){
             sprintf(path, "%s%s/%s/%s", pop3->base_dir, cli_data->user->name, "cur", aux->name);
@@ -439,12 +439,12 @@ void delete_marked(){
             // libero la memoria de la lista del archivo
             file_list* next = aux->next;
             if ( i == 0 ){
-                pop3->maildir->cur->list = aux->next;
+                cli_data->maildir->cur->list = aux->next;
             }
             free(aux);
             aux = next;
 
-            pop3->maildir->cur->size--;
+            cli_data->maildir->cur->size--;
         }else{
             i++;
             aux = aux->next;
@@ -452,7 +452,7 @@ void delete_marked(){
     }
 
     i=0;
-    aux = pop3->maildir->tmp->list;
+    aux = cli_data->maildir->tmp->list;
     while ( aux != NULL ){
         if ( aux->deleted ){
             sprintf(path, "%s%s/%s/%s", pop3->base_dir, cli_data->user->name, "tmp", aux->name);
@@ -462,12 +462,12 @@ void delete_marked(){
             // libero la memoria de la lista del archivo
             file_list* next = aux->next;
             if ( i == 0 ){
-                pop3->maildir->tmp->list = aux->next;
+                cli_data->maildir->tmp->list = aux->next;
             }
             free(aux);
             aux = next;
 
-            pop3->maildir->tmp->size--;
+            cli_data->maildir->tmp->size--;
         }else{
             i++;
             aux = aux->next;
@@ -497,20 +497,20 @@ int delete_message(int file_number){
         write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, response, strlen(response));
         //sendcli_socket, response, strlen(response), 0);
         return 1;
-    }else if ( file_number > pop3->maildir->new->size + pop3->maildir->cur->size + pop3->maildir->tmp->size ){
+    }else if ( file_number > cli_data->maildir->new->size + cli_data->maildir->cur->size + cli_data->maildir->tmp->size ){
         char* response = "-ERR Message not found\r\n";
         write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, response, strlen(response));
         //sendcli_socket, response, strlen(response), 0);
         return 1;
-    }else if ( file_number <= pop3->maildir->new->size ){
+    }else if ( file_number <= cli_data->maildir->new->size ){
         
-        mark_del_in_list( pop3->maildir->new, file_number);
+        mark_del_in_list( cli_data->maildir->new, file_number);
 
-    }else if ( file_number <= pop3->maildir->new->size + pop3->maildir->cur->size ){
-        mark_del_in_list( pop3->maildir->cur, file_number-pop3->maildir->new->size);
+    }else if ( file_number <= cli_data->maildir->new->size + cli_data->maildir->cur->size ){
+        mark_del_in_list( cli_data->maildir->cur, file_number-cli_data->maildir->new->size);
 
     }else{
-        mark_del_in_list( pop3->maildir->tmp, file_number-(pop3->maildir->new->size + pop3->maildir->cur->size));
+        mark_del_in_list( cli_data->maildir->tmp, file_number-(cli_data->maildir->new->size + cli_data->maildir->cur->size));
         
     }
 
@@ -609,26 +609,26 @@ int load_user_structure(){
     snprintf(cur_path, sizeof(cur_path), "%s/cur", user_path);
     snprintf(tmp_path, sizeof(tmp_path), "%s/tmp", user_path);
 
-    pop3->maildir = calloc(1, sizeof(maildir));
+    cli_data->maildir = calloc(1, sizeof(maildir));
 
-    pop3->maildir->new = create_file_list(new_path);
-    if (!pop3->maildir->new) {
+    cli_data->maildir->new = create_file_list(new_path);
+    if (!cli_data->maildir->new) {
         fprintf(stderr, "Error al inicializar la carpeta 'new'\n");
         // Continuar aunque falle, dependiendo de la lógica de tu servidor
     }
-    pop3->maildir->new->size = amount_mails(pop3->maildir->new);
+    cli_data->maildir->new->size = amount_mails(cli_data->maildir->new);
 
-    pop3->maildir->cur = create_file_list(cur_path);
-    if (!pop3->maildir->cur) {
+    cli_data->maildir->cur = create_file_list(cur_path);
+    if (!cli_data->maildir->cur) {
         fprintf(stderr, "Error al inicializar la carpeta 'cur'\n");
     }
-    pop3->maildir->cur->size = amount_mails(pop3->maildir->cur);
+    cli_data->maildir->cur->size = amount_mails(cli_data->maildir->cur);
 
-    pop3->maildir->tmp = create_file_list(tmp_path);
-    if (!pop3->maildir->tmp) {
+    cli_data->maildir->tmp = create_file_list(tmp_path);
+    if (!cli_data->maildir->tmp) {
         fprintf(stderr, "Error al inicializar la carpeta 'tmp'\n");
     }
-    pop3->maildir->tmp->size = amount_mails(pop3->maildir->tmp);
+    cli_data->maildir->tmp->size = amount_mails(cli_data->maildir->tmp);
 
     return 0;
 }
@@ -637,6 +637,7 @@ int destroy_user_list(file_list_header* list){
     file_list* aux = list->list;
     while ( aux != NULL ){
         file_list* next = aux->next;
+        free(aux->name);
         free(aux);
         aux = next;
     }
@@ -646,10 +647,10 @@ int destroy_user_list(file_list_header* list){
 
 int destroy_maildir(){
 
-    destroy_user_list(pop3->maildir->cur);
-    destroy_user_list(pop3->maildir->new);
-    destroy_user_list(pop3->maildir->tmp);
-    free(pop3->maildir);
+    destroy_user_list(cli_data->maildir->cur);
+    destroy_user_list(cli_data->maildir->new);
+    destroy_user_list(cli_data->maildir->tmp);
+    free(cli_data->maildir);
     return 0;
 
 }
@@ -848,6 +849,7 @@ void handle_client(Client_data* client_data ) {
             //sendcli_socket, response, strlen(response), 0);
             client_data->client_state = CLOSING;
             delete_marked();
+            destroy_maildir();
             printf("Client disconnected.\n");
             close(client_data->cli_socket);
             goto end;
