@@ -54,6 +54,26 @@ char** strsep( char* str, char delim ) {
     return result;
 }
 
+void split_t_arg( char* original, char** path, char** right_hand_arg){
+    int i = 0;
+
+    while (original[i] != ' ' && original[i] != '\0') {
+        i++;
+    }
+
+    path = calloc(i + 1, sizeof(char));
+    snprintf(*path, i + 1, "%s", original);
+
+    int len = strlen(original + i + 1);
+    right_hand_arg = calloc(len + 1, sizeof(char));
+
+    if (original[i] == ' ') {
+        snprintf(*right_hand_arg, len + 1, "%s", original + i + 1);
+    } else {
+        right_hand_arg[0] = '\0';
+    }
+}
+
 static char* users[] = {
     "user1:pass1",
     "user2:pass2",
@@ -193,9 +213,8 @@ parse_args(const int argc, char **argv, pop3_structure *args) {
             case 'T':
                 args->trans = calloc(1, sizeof(transformation_structure));
                 args->trans_enabled = true;
-                // separo el binario de los argumentos
-                args->trans->trans_binary_path = optarg;
-                args->trans->trans_args = argv[optind];
+
+                split_t_arg(optarg, &args->trans->trans_binary_path, &args->trans->trans_args);
                 break;
             case 'u':
                 if(nusers >= MAX_USERS) {
