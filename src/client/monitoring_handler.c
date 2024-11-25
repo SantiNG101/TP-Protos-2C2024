@@ -33,6 +33,8 @@ static int pop3_socket = -1;
 double response_time_ms = 0.0;
 int total_messages = 0;
 int total_bytes = 0;
+int online_connections = 0;
+int total_connections =0;
 
 char response_buffer[BUFFER_SIZE] = {'\0'};
 
@@ -177,4 +179,12 @@ int get_total_messages(void) {
 
 int get_total_bytes(void) {
     return total_bytes;
+}
+
+int get_online_connections(void){
+    return online_connections;
+}
+
+int get_total_connections(void){
+    return total_connections;
 }

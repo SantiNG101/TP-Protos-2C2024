@@ -22,5 +22,7 @@ double get_response_time(void);
 int retrieve_pop3_stats(void);
 int get_total_messages(void);
 int get_total_bytes(void);
+int get_online_connections(void);
+int get_total_connections(void);
 
 #endif // MONITORING_HANDLER_H
