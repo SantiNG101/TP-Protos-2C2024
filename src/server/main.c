@@ -36,7 +36,7 @@ int add_client(int client_fd, pop3_structure* pop3_struct) {
         pollfds[client_count+1].events = POLLIN;
 
         clients[client_count].client_state = AUTHORIZATION;
-        clients[client_count].pop3 = calloc(1, sizeof(pop3_structure));
+        clients[client_count].pop3 = pop3_struct;
         clients[client_count].user = NULL;
         return 0;
     }
@@ -56,8 +56,6 @@ int handle_close_client(int index) {
     clients[client_count-1].cli_socket = -1;
     clients[client_count-1].client_state = -1;
     clients[client_count-1].user = NULL;
-    clients[client_count-1].pop3->user_list = NULL;
-    clients[client_count-1].pop3->maildir = NULL;
 
     client_count--;
     return 0;
