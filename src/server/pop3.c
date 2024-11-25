@@ -60,6 +60,7 @@ int read_socket_buffer(char *recv_buffer, int socket_fd, size_t buffer_size) {
 
     } else if (bytes_read == 0) {
         fprintf(stderr, "Connection closed by peer.\n");
+        cli_data->client_state = CLOSING;
         return 0;
     } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
         return -1;
