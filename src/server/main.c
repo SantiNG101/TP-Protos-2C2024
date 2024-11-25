@@ -30,23 +30,39 @@ void init_pollfds() {
     }
 }
 
-void init_clientData() {
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        clients[i].client_state = AUTHORIZATION;
-        clients[i].pop3 = calloc(1, sizeof(pop3_structure));
-        clients[i].pop3->user_list = NULL;
-        clients[i].pop3->maildir = NULL;
-        clients[i].user = NULL;
-    }
-}
-
-int add_client(int client_fd) {
+int add_client(int client_fd, pop3_structure* pop3_struct) {
     if(client_count < MAX_CLIENTS + 1){
         pollfds[client_count+1].fd = client_fd;
         pollfds[client_count+1].events = POLLIN;
+
+        clients[client_count].client_state = AUTHORIZATION;
+        clients[client_count].pop3 = pop3_struct;
+        clients[client_count].user = NULL;
         return 0;
     }
     return -1;
+}
+
+int handle_close_client(int index) {
+    close(pollfds[index].fd);
+    pollfds[index].fd = pollfds[client_count].fd;
+    pollfds[index].events = pollfds[client_count].events;
+
+    pollfds[client_count].fd = -1;
+    pollfds[client_count].events = POLLIN;
+
+    free_pop3_structure(clients[index].pop3);
+
+    clients[index] = clients[client_count-1];
+
+    clients[client_count-1].pop3->cli_socket = -1;
+    clients[client_count-1].client_state = -1;
+    clients[client_count-1].user = NULL;
+    clients[client_count-1].pop3->user_list = NULL;
+    clients[client_count-1].pop3->maildir = NULL;
+
+    client_count--;
+    return 0;
 }
 
 int main( const int argc, char **argv ) {
@@ -97,7 +113,6 @@ int main( const int argc, char **argv ) {
     printf("Server started on port %d, accepting IPv4 and IPv6 connections...\n", pop3_struct->port);
 
     init_pollfds();
-    init_clientData();
 
     // creo el programa de traduccion
     if ( pop3_struct->trans_enabled ){
@@ -140,7 +155,6 @@ int main( const int argc, char **argv ) {
     }
 
 
-
     pollfds[0].fd = server_socket;
     pollfds[0].events = POLLIN;
 
@@ -163,7 +177,7 @@ int main( const int argc, char **argv ) {
                     if (client_socket < 0) {
                         perror("Accept failed");
                     } else {
-                        if (add_client(client_socket) < 0) {
+                        if (add_client(client_socket, pop3_struct) < 0) {
                             printf("Too many clients\n");
                             close(client_socket);
                         } else {
@@ -176,9 +190,7 @@ int main( const int argc, char **argv ) {
                 } else {
                     handle_client(&clients[i-1]);
                     if(clients[i-1].client_state == ERROR_CLIENT || clients[i-1].client_state == CLOSING){
-                        close(pollfds[i].fd);
-                        pollfds[i].fd = -1;
-                        pollfds[i].events = POLLIN;
+                        handle_close_client(i);
                     }
                 }
             }
