@@ -800,7 +800,7 @@ void handle_client(Client_data* client_data, Metrics* metrics, int* server_socke
 
             switch(comm){
                 case USER:
-                    if ( client_data->client_state != AUTHORIZATION ){
+                    if ( client_data->client_state != AUTHORIZATION && client_data->client_state != MANAGER){
                         client_data->client_state = AUTHORIZATION;
                     }
                     if ( buffer_read( b ) == '\0' ){
@@ -952,7 +952,7 @@ void handle_client(Client_data* client_data, Metrics* metrics, int* server_socke
                     }
                     response = "+OK\r\n";
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                    update_server_address(server_socket, server_addr, NULL, atoi(command+5));
+                    *server_fd = update_server_address(server_socket, server_addr, NULL, atoi(command+5));
                     break;
                 case HOST:
                     if ( client_data->client_state != MANAGER ){
@@ -1002,7 +1002,7 @@ void handle_client(Client_data* client_data, Metrics* metrics, int* server_socke
                     char * ip = calloc(1, strlen(command+5));
                     strcpy(ip, command+5);
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                    update_server_address(server_socket, server_addr, ip, 0);
+                    *server_fd = update_server_address(server_socket, server_addr, ip, 0);
                     free(ip);
                     break;
                 case INFO:
@@ -1011,8 +1011,10 @@ void handle_client(Client_data* client_data, Metrics* metrics, int* server_socke
                         write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                         break;
                     }
-                    sprintf(response, "+OK %s;%s;%s\r\n", pop3->host, pop3->base_dir, pop3->ip);
-                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                    char * info = calloc(1, BUFFER_SIZE);
+                    sprintf(info, "+OK %s;%s;%s\r\n", pop3->host, pop3->base_dir, pop3->ip);
+                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, info, strlen(info));
+                    free(info);
                     break;
                 case METR:
                     if ( client_data->client_state != MANAGER ){
@@ -1020,9 +1022,10 @@ void handle_client(Client_data* client_data, Metrics* metrics, int* server_socke
                         write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                         break;
                     }
-                    sprintf(response, "+OK %d;%d;%d;%d\r\n", metrics->total_messages, metrics->total_bytes, metrics->total_historic_connections, metrics->max_consecutive_connections);
-                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                    
+                    char * metr = calloc(1, BUFFER_SIZE);
+                    sprintf(metr, "+OK %d;%d;%d;%d\r\n", metrics->total_messages, metrics->total_bytes, metrics->total_historic_connections, metrics->max_consecutive_connections);
+                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, metr, strlen(metr));
+                    free(metr);
                     break;
                 case LOGG:
                     if ( client_data->client_state != MANAGER ){

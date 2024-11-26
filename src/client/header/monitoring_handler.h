@@ -1,10 +1,36 @@
 #ifndef MONITORING_HANDLER_H
 #define MONITORING_HANDLER_H
 
-// Definiciones de constantes
-#define BUFFER_SIZE 256
+#include <stdlib.h>
+#include <time.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <strings.h>
+#include <string.h>
+#include <stdio.h>
+#include <unistd.h>
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+
+
+#define LINE_END "\r\n"
+#define CLIENT_IDENTIFIER "pop3_monitor"
+#define STATUS_CMD "STAT" LINE_END
+#define TERMINATE_CMD "QUIT" LINE_END
+
 #define ONLINE 1
 #define OFFLINE 0
+
+#define NOT_REACHABLE "Unreachable"
+#define IS_REACHABLE "Online"
+
+// Códigos de error personalizados
+#define SOCKET_ERROR -1
+#define AUTH_ERROR -2
+#define STAT_ERROR -3
+
 
 // Funciones para la conexión y desconexión del servidor POP3
 int connect_to_pop3_server(char *address, char *port_number);

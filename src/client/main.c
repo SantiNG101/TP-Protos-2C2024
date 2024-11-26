@@ -1,6 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include "./header/monitoring_handler.h"
+#include "../shared/args.h"
 
 int main(int argc, char *argv[]) {
     if (argc != 3) {
@@ -28,11 +27,22 @@ int main(int argc, char *argv[]) {
         char CMD[BUFFER_SIZE];
         int state;
 
-        printf("Server Status: %s\n", get_connection_status());
+        printf("Server Status: %d\n", get_connection_status());
         printf("Response Time: %.2f ms\n", get_response_time());
 
         printf("Enter a command (STAT, INFO, QUIT): ");
-        scanf("%s", CMD);
+
+        fgets(CMD, BUFFER_SIZE, stdin);
+        // Remove newline character if it exists
+        size_t len = strlen(CMD);
+        if (len > 0 && CMD[len - 1] == '\n') {
+            CMD[len - 1] = '\0'; // Remove the newline character
+        }
+
+        // Append '\r' and '\n' to the string
+        CMD[len-1] = '\r';
+        CMD[len ] = '\n';
+        CMD[len +1] = '\0';
 
         if ( strncmp(CMD, "QUIT", 4) == 0 ){
             printf("Disconnecting from server...\n");

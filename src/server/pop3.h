@@ -68,6 +68,7 @@ enum pop3_command {
     DIRR,
     TRAN,
     IPV6,
+    CONFIG,
     QUIT,
     ERROR_COMMAND = -1
 };

@@ -1,42 +1,5 @@
-#include <stdlib.h>
-#include <time.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <strings.h>
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
 #include "./header/monitoring_handler.h"
 #include "../shared/args.h"
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-
-#define BUFFER_SIZE 256
-
-#define LINE_END "\r\n"
-#define CLIENT_IDENTIFIER "pop3_monitor"
-#define STATUS_CMD "STAT" LINE_END
-#define TERMINATE_CMD "QUIT" LINE_END
-
-#define ONLINE 1
-#define OFFLINE 0
-
-#define NOT_REACHABLE "Unreachable"
-#define IS_REACHABLE "Online"
-
-// Códigos de error personalizados
-#define SOCKET_ERROR -1
-#define AUTH_ERROR -2
-#define STAT_ERROR -3
-
-enum command_type{
-    CONFIG,
-    INFO,
-    METR,
-    LOGG
-};
 
 int connection_status = OFFLINE;
 static int pop3_socket = -1;
@@ -45,6 +8,7 @@ int total_messages = 0;
 int total_bytes = 0;
 int online_connections = 0;
 int total_connections =0;
+int get_command(char* command);
 
 char response_buffer[BUFFER_SIZE] = {'\0'};
 
@@ -127,49 +91,56 @@ int send_command(char* command) {
         return 1; // Indica error en el envío
     }
 
-    int bytes_received = recv(pop3_socket, response_buffer, BUFFER_SIZE - 1, 0);
-    if (bytes_received <= 0) {
-        connection_status = OFFLINE;
-        perror("Failed to receive response");
-        return 1; // Indica error en la recepción
-    }
-
-    response_buffer[bytes_received] = '\0';
     return 0;
 }
 
-char* str_checker( char* str, char delim, int* i ){
-    
-    while ( str[*i] != '\0' && str[*i] != delim ) {
-        result[0][*i] = str[*i];
-        *i++;
+char* str_checker(char* str, char delim, int* i) {
+    while (str[*i] != '\0' && str[*i] != delim) {
+        (*i)++;  
     }
-    if ( str[*i] == '\0' ) {
-        free(result);
+    
+    if (str[*i] == '\0') {
         return NULL;
     }
+    
     str[*i] = '\0';
-    *i++;
+
+    (*i)++;
+    
     return strdup(str);
 }
 
-char** separator( char* str, char delim, enum command_type type) {
+char** separator(char* str, char delim, int type) {
     int i = 0;
-
-    if ( type == METR ){
+    
+    if (type == METR) {
         char** result = calloc(4, sizeof(char*));
+        if (result == NULL) {
+            return NULL;  
+        }
+
         result[0] = str_checker(str, delim, &i);
-        result[1] = str_checker(str+i, delim, &i);
-        result[2] = str_checker(str+i, delim, &i);
-        result[3] = str_checker(str+i, delim, &i);
-    }else if ( type == INFO ){
+        result[1] = str_checker(str, delim, &i);
+        result[2] = str_checker(str, delim, &i);
+        result[3] = str_checker(str, delim, &i);
+        
+        return result;
+    }
+    
+    else if (type == INFO) {
         char** result = calloc(3, sizeof(char*));
+        if (result == NULL) {
+            return NULL;  
+        }
+
         result[0] = str_checker(str, delim, &i);
-        result[1] = str_checker(str+i, delim, &i);
-        result[2] = str_checker(str+i, delim, &i);
+        result[1] = str_checker(str, delim, &i);
+        result[2] = str_checker(str, delim, &i);
+
+        return result;
     }
 
-    return result;
+    return NULL;
 }
 
 void get_server_info(char* response){
@@ -226,17 +197,17 @@ int recv_response(char* command){
         }
         response_buffer[bytes_received] = '\0';
             
-        
+    printf("Server response: %s\n", response_buffer);
         if ( strncmp(response_buffer, "+OK", 3) == 0 ){
             switch(state){
                 case CONFIG:
                     printf("Configuration updated successfully.\n");
                     break;
                 case INFO:
-                    get_server_info(response_buffer+5);
+                    get_server_info(response_buffer+4);
                     break;
                 case METR:
-                    get_metrics(response_buffer+5);
+                    get_metrics(response_buffer+4);
                     break;
             }
         }
@@ -255,6 +226,8 @@ void verify_server_status(void) {
     if (send_command("NOOP" LINE_END) == 1) {
         connection_status = OFFLINE;
     } else {
+        char temp[BUFFER_SIZE];
+        recv(pop3_socket, temp, BUFFER_SIZE - 1, 0);
         connection_status = ONLINE;
     }
 
