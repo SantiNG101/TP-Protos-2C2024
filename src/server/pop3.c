@@ -24,25 +24,36 @@ void transfer_without_transformation(int file);
 int get_command_value( char* command ){
 
     if (strncmp(command, "USER", 4) == 0) {
+        log_connection(LOGGER_FILE, cli_data->ip, "User command");
         return USER;
     } else if (strncmp(command, "QUIT", 4) == 0) {
+        log_connection(LOGGER_FILE, cli_data->ip, "Quit command");
         return QUIT;
     } else if (strncmp(command, "PASS", 4) == 0) {
+        log_connection(LOGGER_FILE, cli_data->ip, "Pass command");
         return PASS;
-    } else if ( strncmp(command, "STAT", 4) == 0 ){ 
+    } else if ( strncmp(command, "STAT", 4) == 0 ){
+        log_connection(LOGGER_FILE, cli_data->ip, "Stat command"); 
         return STAT;
     } else if ( strncmp(command, "LIST", 4) == 0 ){ 
+        log_connection(LOGGER_FILE, cli_data->ip, "List command");
         return LIST;
     } else if ( strncmp(command, "RETR", 4) == 0 ){ 
+        log_connection(LOGGER_FILE, cli_data->ip, "Retr command");
         return RETR;
     } else if ( strncmp(command, "DELE", 4) == 0 ){ 
+        log_connection(LOGGER_FILE, cli_data->ip, "Dele command");
         return DELE;
     } else if ( strncmp(command, "NOOP", 4) == 0 ){
+        log_connection(LOGGER_FILE, cli_data->ip, "Noop command");
         return NOOP;
     }else if ( strncmp(command, "RSET", 4) == 0 ){
+        log_connection(LOGGER_FILE, cli_data->ip, "Rset command");
         return RSET;
-    }else
+    }else {
+        log_connection(LOGGER_FILE, cli_data->ip, "Error command");
         return ERROR_COMMAND;
+    }
 
 }
 
@@ -193,6 +204,22 @@ int list_messages(int message_number) {
     }
 
     return 0;
+}
+
+void log_connection(const char *filename, const char *ip, const char * message) {
+    FILE *logfile = fopen(filename, "a");
+    if (logfile == NULL) {
+        perror("Error opening log file");
+        exit(EXIT_FAILURE);
+    }
+
+    time_t now = time(NULL);
+    char *timestamp = ctime(&now);
+    timestamp[strcspn(timestamp, "\n")] = '\0';
+
+    fprintf(logfile, "(%s)->[%s] %s\n", message, timestamp, ip);
+
+    fclose(logfile);
 }
 
 void send_file(const char *filename) {

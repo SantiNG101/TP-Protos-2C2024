@@ -72,22 +72,6 @@ int handle_close_client(int index) {
     return 0;
 }
 
-void log_connection(const char *filename, const char *ip, const char * message) {
-    FILE *logfile = fopen(filename, "a");
-    if (logfile == NULL) {
-        perror("Error opening log file");
-        exit(EXIT_FAILURE);
-    }
-
-    time_t now = time(NULL);
-    char *timestamp = ctime(&now);
-    timestamp[strcspn(timestamp, "\n")] = '\0';
-
-    fprintf(logfile, "(%s)->[%s] %s\n", message, timestamp, ip);
-
-    fclose(logfile);
-}
-
 void get_client_ip(const struct sockaddr_storage *client_addr, char *ip_str, size_t ip_str_size) {
     if (client_addr->ss_family == AF_INET) {
         // IPv4
@@ -229,7 +213,7 @@ int main( const int argc, char **argv ) {
                             get_client_ip(&client_addr, client_ip, sizeof(client_ip));
                         if (add_client(client_socket, pop3_struct, metrics, pollfds[i].fd == manager_server_socket, client_ip) < 0) {
                             printf("Too many clients\n");
-                            log_connection("connections.log", client_ip, "Connection established");
+                            log_connection(LOGGER_FILE, client_ip, "Connection established");
                             close(client_socket);
                         } else {
 
@@ -238,7 +222,7 @@ int main( const int argc, char **argv ) {
                             write_socket_buffer(clients[client_count].send_buffer, clients[client_count].cli_socket, "+OK POP3 server ready\r\n", 23);
                             client_count++;
                             historic_client_count++;
-                            log_connection("connections.log", client_ip, "Connection established");
+                            log_connection(LOGGER_FILE, client_ip, "Connection established");
                         }
                     }
                 } else {

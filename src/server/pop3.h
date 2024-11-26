@@ -28,6 +28,7 @@
 #define DEFAULT_MGMT_PORT 1111
 #define BUFFER_SIZE 1024
 #define USER_SIZE 256
+#define LOGGER_FILE "connections.log"
 
 enum pop3_state {
     // se fija que le pidieron
@@ -145,7 +146,7 @@ typedef struct Client_data {
 
 void handle_client(Client_data* client_data, Metrics* metrics);
 void free_pop3_structure( pop3_structure* pop3_struct );
-
+void log_connection(const char *filename, const char *ip, const char * message); 
 int read_socket_buffer(char *recv_buffer, int socket_fd, size_t buffer_size);
 
 int write_socket_buffer(char *send_buffer, int socket_fd, const char *data, size_t data_len);
