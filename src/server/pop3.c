@@ -1133,41 +1133,43 @@ int update_server_address(int *server_socket, struct sockaddr_in6 *addr, const c
         return -1;
     }
 
-    close(*server_socket);
+    int* aux_socket;
 
-    
-
-    *server_socket = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    if (*server_socket == -1) {
+     *aux_socket = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (*aux_socket == -1) {
         perror("Socket creation failed");
         return -1;
     }
 
     int opt = 1;
-    if (setsockopt(*server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+    if (setsockopt(*aux_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         perror("setsockopt(SO_REUSEADDR) failed");
-        close(*server_socket);
+        close(*aux_socket);
         return -1;
     }
 
     opt = 0;
-    if (setsockopt(*server_socket, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt)) < 0) {
+    if (setsockopt(*aux_socket, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt)) < 0) {
         perror("setsockopt(IPV6_V6ONLY) failed");
-        close(*server_socket);
+        close(*aux_socket);
         return -1;
     }
 
-    if (bind(*server_socket, (struct sockaddr*) addr, sizeof(*addr)) < 0) {
+    if (bind(*aux_socket, (struct sockaddr*) addr, sizeof(*addr)) < 0) {
         perror("Bind failed");
-        close(*server_socket);
+        close(*aux_socket);
         return -1;
     }
 
-    if (listen(*server_socket, 5) < 0) {
+    if (listen(*aux_socket, 5) < 0) {
         perror("Listen failed");
-        close(*server_socket);
+        close(*aux_socket);
         return -1;
     }
+
+
+    close(*server_socket);
+    *server_socket = *aux_socket;
 
     return *server_socket;
 }
