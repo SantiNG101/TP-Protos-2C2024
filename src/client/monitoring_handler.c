@@ -94,54 +94,60 @@ int send_command(char* command) {
     return 0;
 }
 
-char* str_checker(char* str, char delim, int* i) {
-    while (str[*i] != '\0' && str[*i] != delim) {
-        (*i)++;  
-    }
+char* extract_token(const char* str, char delim, int* index) {
+    int start = *index;
     
-    if (str[*i] == '\0' && *i == 0) {
+    // Find the position of the next delimiter or end of the string
+    while (str[*index] != '\0' && str[*index] != delim) {
+        (*index)++;
+    }
+
+    // Calculate the length of the current token
+    int length = *index - start;
+
+    // If no token was found
+    if (length == 0 && str[*index] == '\0') {
         return NULL;
     }
-    
-    str[*i] = '\0';
 
-    (*i)++;
-    
-    return strdup(str);
-}
-
-char** separator(char* str, char delim, int type) {
-    int i = 0;
-    
-    if (type == METR) {
-        char** result = calloc(4, sizeof(char*));
-        if (result == NULL) {
-            return NULL;  
-        }
-
-        result[0] = str_checker(str, delim, &i);
-        result[1] = str_checker(str+i, delim, &i);
-        result[2] = str_checker(str+i, delim, &i);
-        result[3] = str_checker(str+i, delim, &i);
-        
-        return result;
+    // Allocate memory for the token and copy it
+    char* token = calloc(length + 1, sizeof(char));
+    if (token == NULL) {
+        perror("Memory allocation failed");
+        return NULL;
     }
-    
-    else if (type == INFO) {
-        char** result = calloc(3, sizeof(char*));
-        if (result == NULL) {
-            return NULL;  
-        }
+    strncpy(token, str + start, length);
 
-        result[0] = str_checker(str, delim, &i);
-        result[1] = str_checker(str+i, delim, &i);
-        result[2] = str_checker(str+i, delim, &i);
-
-        return result;
+    // Move past the delimiter, if any
+    if (str[*index] == delim) {
+        (*index)++;
     }
 
-    return NULL;
+    return token;
 }
+
+char** separator(const char* str, char delim, int type) {
+    int index = 0;
+    int count = (type == METR) ? 4 : 3;
+
+    // Allocate memory for the result array
+    char** result = calloc(count + 1, sizeof(char*)); // +1 for NULL terminator
+    if (result == NULL) {
+        perror("Memory allocation failed");
+        return NULL;
+    }
+
+    // Extract tokens
+    for (int i = 0; i < count; i++) {
+        result[i] = extract_token(str, delim, &index);
+        if (result[i] == NULL) {
+            break; // Stop if no more tokens are found
+        }
+    }
+
+    return result;
+}
+
 
 void get_server_info(char* response){
     char** info = separator(response, ';', INFO);
@@ -271,3 +277,4 @@ int get_command(char* command){
         return -1;
     }
 }
+
