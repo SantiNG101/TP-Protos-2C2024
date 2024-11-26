@@ -47,14 +47,37 @@ int get_command_value( char* command ){
     } else if ( strncmp(command, "NOOP", 4) == 0 ){
         log_connection(LOGGER_FILE, cli_data->ip, "Noop command");
         return NOOP;
-    }else if ( strncmp(command, "RSET", 4) == 0 ){
+    } else if ( strncmp(command, "RSET", 4) == 0 ){
         log_connection(LOGGER_FILE, cli_data->ip, "Rset command");
         return RSET;
-    }else {
+    } else if ( strncmp(command, "INFO", 4) == 0 ){
+        log_connection(LOGGER_FILE, cli_data->ip, "Info command");
+        return INFO;
+    } else if ( strncmp(command, "METR", 4) == 0 ){
+        log_connection(LOGGER_FILE, cli_data->ip, "Metr command");
+        return METR;
+    } else if ( strncmp(command, "LOGG", 4) == 0 ){
+        log_connection(LOGGER_FILE, cli_data->ip, "Logg command");
+        return LOGG;
+    } else if (strncmp(command, "PORT", 4) == 0) {
+        log_connection(LOGGER_FILE, cli_data->ip, "Port command");
+        return PORT;
+    } else if (strncmp(command, "HOST", 4) == 0) {
+        log_connection(LOGGER_FILE, cli_data->ip, "Host command");
+        return HOST;
+    } else if (strncmp(command, "DIRR", 4) == 0) {
+        log_connection(LOGGER_FILE, cli_data->ip, "Dirr command");
+        return DIRR;
+    } else if (strncmp(command, "TRAN", 4) == 0) {
+        log_connection(LOGGER_FILE, cli_data->ip, "Tran command");
+        return TRAN;
+    } else if (strncmp(command, "IPV6", 4) == 0) {
+        log_connection(LOGGER_FILE, cli_data->ip, "Ipv6 command");
+        return IPV6;
+    } else {
         log_connection(LOGGER_FILE, cli_data->ip, "Error command");
         return ERROR_COMMAND;
     }
-
 }
 
 int amount_mails( file_list_header* list ){
@@ -229,7 +252,7 @@ void send_file(const char *filename) {
         return;
     }
 
-    if (cli_data->pop3->trans_enabled) {
+    if (cli_data->pop3->trans_enabled && cli_data->client_state == TRANSACTION) {
         int pipe_child_to_parent[2];
 
         if (setup_pipes(pipe_child_to_parent) != 0) {
@@ -918,6 +941,77 @@ void handle_client(Client_data* client_data, Metrics* metrics) {
                     response = "OK!!\r\n";
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                     //sendcli_socket, response, strlen(response), 0);
+                    break;
+                case PORT:
+                    if ( client_data->client_state != MANAGER ){
+                        response = "-ERR You lack privillege\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        break;
+                    }
+                    response = "+OK Port command\r\n";
+                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                    break;
+                case HOST:
+                    if ( client_data->client_state != MANAGER ){
+                        response = "-ERR You lack privillege\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        break;
+                    }
+                    response = "+OK Host command\r\n";
+                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                    break;
+                case DIRR:
+                    if ( client_data->client_state != MANAGER ){
+                        response = "-ERR You lack privillege\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        break;
+                    }
+                    response = "+OK Dir command\r\n";
+                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                    break;
+                case TRAN:
+                    if ( client_data->client_state != MANAGER ){
+                        response = "-ERR You lack privillege\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        break;
+                    }
+                break;
+                case IPV6:
+                    if ( client_data->client_state != MANAGER ){
+                        response = "-ERR You lack privillege\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        break;
+                    }
+                    response = "+OK IPV6 command\r\n";
+                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                    break;
+                case INFO:
+                    if ( client_data->client_state != MANAGER ){
+                        response = "-ERR You lack privillege\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        break;
+                    }
+                    response = "+OK Info command\r\n";
+                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                    break;
+                case METR:
+                    if ( client_data->client_state != MANAGER ){
+                        response = "-ERR You lack privillege\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        break;
+                    }
+                    response = "+OK Metrics command\r\n";
+                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+
+                    break;
+                case LOGG:
+                    if ( client_data->client_state != MANAGER ){
+                        response = "-ERR You lack privillege\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        break;
+                    }
+                    response = "+OK Log command\r\n";
+                    send_file_process(LOGGER_FILE);
                     break;
                 case QUIT:
                     response = "+OK Goodbye\r\n";

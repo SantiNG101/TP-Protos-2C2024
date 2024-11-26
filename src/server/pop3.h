@@ -57,6 +57,14 @@ enum pop3_command {
     DELE,
     NOOP,
     RSET,
+    INFO,
+    METR,
+    LOGG,
+    PORT,
+    HOST,
+    DIRR,
+    TRAN,
+    IPV6,
     QUIT,
     ERROR_COMMAND = -1
 };
