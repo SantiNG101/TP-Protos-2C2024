@@ -22,6 +22,7 @@ struct doh {
  */
 void 
 parse_args(const int argc, char **argv, pop3_structure *args);
+char** strsep( char* str, char delim );
 
 #endif
 

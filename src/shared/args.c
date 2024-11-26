@@ -7,8 +7,6 @@
 
 #include "args.h"
 
-char** strsep( char* str, char delim );
-
 static unsigned short
 port(const char *s) {
      char *end     = 0;

@@ -15,14 +15,13 @@ int send_command(char* command);
 
 // Funciones para verificar el estado del servidor
 void verify_server_status(void);
-char* get_connection_status(void);
+int get_connection_status(void);
 double get_response_time(void);
 
 // Funciones para obtener estadísticas del servidor
-int retrieve_pop3_stats(void);
 int get_total_messages(void);
 int get_total_bytes(void);
 int get_online_connections(void);
 int get_total_connections(void);
-
+int recv_response(char* command);
 #endif // MONITORING_HANDLER_H

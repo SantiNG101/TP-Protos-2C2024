@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "./header/monitoring_handler.h"
+#include "../shared/args.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -16,8 +17,6 @@
 
 #define LINE_END "\r\n"
 #define CLIENT_IDENTIFIER "pop3_monitor"
-#define AUTH_USER_CMD "USER user1" LINE_END
-#define AUTH_PASS_CMD "PASS pass1" LINE_END
 #define STATUS_CMD "STAT" LINE_END
 #define TERMINATE_CMD "QUIT" LINE_END
 
@@ -31,6 +30,13 @@
 #define SOCKET_ERROR -1
 #define AUTH_ERROR -2
 #define STAT_ERROR -3
+
+enum command_type{
+    CONFIG,
+    INFO,
+    METR,
+    LOGG
+};
 
 int connection_status = OFFLINE;
 static int pop3_socket = -1;
@@ -84,18 +90,6 @@ int connect_to_pop3_server(char *address, char *port_number) {
         return SOCKET_ERROR;
     }
 
-    // Proceso de autenticación
-    if (send_command(AUTH_USER_CMD) == 1 || send_command(AUTH_PASS_CMD) == 1) {
-        perror("Authentication failed");
-        return AUTH_ERROR;
-    }
-
-    // Llamada para obtener estadísticas del servidor
-    if (retrieve_pop3_stats() != 0) { // Manejo de errores al obtener estadísticas
-        perror("Failed to retrieve POP3 statistics");
-        return STAT_ERROR;
-    }
-
     connection_status = ONLINE;
     return 0;
 }
@@ -144,6 +138,116 @@ int send_command(char* command) {
     return 0;
 }
 
+char* str_checker( char* str, char delim, int* i ){
+    
+    while ( str[*i] != '\0' && str[*i] != delim ) {
+        result[0][*i] = str[*i];
+        *i++;
+    }
+    if ( str[*i] == '\0' ) {
+        free(result);
+        return NULL;
+    }
+    str[*i] = '\0';
+    *i++;
+    return strdup(str);
+}
+
+char** separator( char* str, char delim, enum command_type type) {
+    int i = 0;
+
+    if ( type == METR ){
+        char** result = calloc(4, sizeof(char*));
+        result[0] = str_checker(str, delim, &i);
+        result[1] = str_checker(str+i, delim, &i);
+        result[2] = str_checker(str+i, delim, &i);
+        result[3] = str_checker(str+i, delim, &i);
+    }else if ( type == INFO ){
+        char** result = calloc(3, sizeof(char*));
+        result[0] = str_checker(str, delim, &i);
+        result[1] = str_checker(str+i, delim, &i);
+        result[2] = str_checker(str+i, delim, &i);
+    }
+
+    return result;
+}
+
+void get_server_info(char* response){
+    char** info = separator(response, ';', INFO);
+    printf("Server info:\n");
+    printf("Hostname: %s\n", info[0]);
+    printf("Base path directory: %s\n", info[1]);
+    printf("IP Address: %s\n", info[2]);
+    for (int i = 0; i < 3; i++){
+        free(info[i]);
+    }
+    free(info);
+}
+
+void get_metrics(char* response){
+    char** metrics = separator(response, ';', METR);
+    printf("Server metrics:\n");
+    printf("Total messages: %s\n", metrics[0]);
+    printf("Total bytes: %s\n", metrics[1]);
+    printf("Total historic connections: %s\n", metrics[2]);
+    printf("Max consecutive connections: %s\n", metrics[3]);
+    for (int i = 0; i < 4; i++){
+        free(metrics[i]);
+    }
+    free(metrics);
+
+}
+
+int recv_response(char* command){
+
+    int state = get_command(command);
+    if (state == -1){
+        return 1;
+    }
+    if (  state == LOGG ){
+        while(1){
+            int bytes_received = recv(pop3_socket, response_buffer, BUFFER_SIZE - 1, 0);
+            if (bytes_received < 0) {
+                perror("Failed to receive response");
+                return 1; // Indica error en la recepción
+            }
+            if (bytes_received == 0) {
+                break;
+            }
+            response_buffer[bytes_received] = '\0';
+            printf("%s", response_buffer);
+        }
+    }else {
+
+        int bytes_received = recv(pop3_socket, response_buffer, BUFFER_SIZE - 1, 0);
+        if (bytes_received <= 0) {
+            perror("Failed to receive response");
+            return 1; // Indica error en la recepción
+        }
+        response_buffer[bytes_received] = '\0';
+            
+        
+        if ( strncmp(response_buffer, "+OK", 3) == 0 ){
+            switch(state){
+                case CONFIG:
+                    printf("Configuration updated successfully.\n");
+                    break;
+                case INFO:
+                    get_server_info(response_buffer+5);
+                    break;
+                case METR:
+                    get_metrics(response_buffer+5);
+                    break;
+            }
+        }
+        else{
+            return 1;
+        }
+    }
+    return 0;
+
+}
+
 void verify_server_status(void) {
     clock_t start_time = clock();
 
@@ -159,43 +263,32 @@ void verify_server_status(void) {
     response_time_ms = ((double)(end_time - start_time) * 1000) / CLOCKS_PER_SEC;
 }
 
-int retrieve_pop3_stats(void) {
-    // Enviar el comando STAT para obtener el número total de mensajes y su tamaño
-    if (send_command(STATUS_CMD) == 0) {
 
-        // Procesar respuesta utilizando sscanf
-        if (sscanf(response_buffer, "+OK %d messages (%d octets)", &total_messages, &total_bytes) != 2) {
-            perror("Failed to parse STAT response");
-            return STAT_ERROR; // Indica error al analizar la respuesta
-        }
 
-        return 0;
-    } else {
-        perror("Failed to retrieve POP3 statistics");
-        return STAT_ERROR; // Indica error al recuperar estadísticas
-    }
-}
-
-char* get_connection_status(void) {
-    return connection_status == ONLINE ? IS_REACHABLE : NOT_REACHABLE;
+int get_connection_status(void) {
+    return connection_status == ONLINE ? ONLINE : OFFLINE;
 }
 
 double get_response_time(void) {
     return response_time_ms;
 }
 
-int get_total_messages(void) {
-    return total_messages;
-}
 
-int get_total_bytes(void) {
-    return total_bytes;
-}
+int get_command(char* command){
 
-int get_online_connections(void){
-    return online_connections;
-}
-
-int get_total_connections(void){
-    return total_connections;
+    if ( strncmp(command, "PORT", 4) == 0 || strncmp(command, "HOST", 4) == 0  || strncmp(command, "DIRR", 4) == 0 || strncmp(command, "TRAN", 4) == 0 || strncmp(command, "IPV6", 4) == 0){
+        return CONFIG;
+    }
+    else if ( strncmp(command, "INFO", 4) == 0 ){
+        return INFO;
+    }
+    else if ( strncmp(command, "METR", 4) == 0 ){
+        return METR;
+    }
+    else if ( strncmp(command, "LOGG", 4) == 0 ){
+        return LOGG;
+    }
+    else{
+        return -1;
+    }
 }
