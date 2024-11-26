@@ -999,7 +999,7 @@ void handle_client(Client_data* client_data, Metrics* metrics, int* server_socke
                         break;
                     }
                     response = "+OK\r\n";
-                    char * ip = calloc(1, strlen(command+5));
+                    char * ip = calloc(1, strlen(command+5)+1);
                     strcpy(ip, command+5);
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                     *server_fd = update_server_address(server_socket, server_addr, ip, 0);
@@ -1134,6 +1134,8 @@ int update_server_address(int *server_socket, struct sockaddr_in6 *addr, const c
     }
 
     close(*server_socket);
+
+    
 
     *server_socket = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (*server_socket == -1) {
