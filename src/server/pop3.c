@@ -15,6 +15,11 @@ Client_data* cli_data;
 
 int client_validation(buffer* buff, Client_data* client_data);
 int password_validation(buffer* buff, Client_data* client_data);
+void send_file(const char *filename);
+int setup_pipes(int pipe_parent_to_child[2], int pipe_child_to_parent[2]);
+pid_t fork_and_exec(int pipe_parent_to_child[2], int pipe_child_to_parent[2]);
+void transfer_with_transformation(int file, int pipe_parent_to_child[2], int pipe_child_to_parent[2]);
+void transfer_without_transformation(int file);
 
 int get_command_value( char* command ){
 
@@ -78,19 +83,18 @@ int write_socket_buffer(char *send_buffer, int socket_fd, const char *data, size
 
     while (total_sent < data_len) {
         size_t remaining_data = data_len - total_sent;
-        ssize_t to_copy = remaining_data < BUFFER_SIZE ? remaining_data : BUFFER_SIZE;
-
+        size_t to_copy = remaining_data < BUFFER_SIZE ? remaining_data : BUFFER_SIZE;
         memcpy(send_buffer, data + total_sent, to_copy);
-        while ((bytes_sent = send(socket_fd, send_buffer, to_copy, 0)) < to_copy) {
-            if (bytes_sent < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    continue;
-                } else {
-                    perror("send failed");
-                    return -1;
-                }
+
+        bytes_sent = send(socket_fd, send_buffer, to_copy, 0);
+
+        if (bytes_sent < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue;
+            } else {
+                perror("send failed");
+                return -1;
             }
-            to_copy -= bytes_sent;
         }
 
         total_sent += bytes_sent;
@@ -192,95 +196,146 @@ int list_messages(int message_number) {
 }
 
 void send_file(const char *filename) {
-    
     int file = open(filename, O_RDONLY);
     if (file < 0) {
         perror("Failed to open file");
         return;
     }
 
-    char buff[BUFFER_SIZE];
-    buffer* state_buffer = calloc(1, sizeof(buffer));
-    buffer_init(state_buffer, BUFFER_SIZE, buff);
+    if (cli_data->pop3->trans_enabled) {
+        int pipe_parent_to_child[2];
+        int pipe_child_to_parent[2];
 
-    ssize_t bytes_read, bytes_sent;
-    bool no_finito = true;
-    fd_set readfds, writefds;
+        if (setup_pipes(pipe_parent_to_child, pipe_child_to_parent) != 0) {
+            close(file);
+            return;
+        }
 
-    while (no_finito) {
-        
-        if ( cli_data->pop3->trans_enabled ){
+        cli_data->trans_in = pipe_parent_to_child[0];
+        cli_data->trans_out = pipe_child_to_parent[1];
 
-            FD_ZERO(&readfds);
-            FD_ZERO(&writefds);
+        pid_t pid = fork_and_exec(pipe_parent_to_child, pipe_child_to_parent);
+        if (pid < 0) {
+            close(file);
+            return;
+        }
 
-            FD_SET(cli_data->pop3->trans->trans_out, &writefds);
-            FD_SET(cli_data->pop3->trans->trans_in, &readfds);
-            int activity = select((cli_data->pop3->trans->trans_out > cli_data->pop3->trans->trans_in? cli_data->pop3->trans->trans_out: cli_data->pop3->trans->trans_in) + 1, &readfds, &writefds, NULL, NULL);
-            if (activity < 0) {
-                perror("Error en select");
-                exit(1);
-            }
+        if (pid > 0) { 
+            transfer_with_transformation(file, pipe_parent_to_child, pipe_child_to_parent);
+        }
+    } else {
+        transfer_without_transformation(file);
+    }
 
-            if ( buffer_can_write(state_buffer) ){
-                bytes_read = read(file, buff, state_buffer->limit - state_buffer->write-1); // -1 por seguro
-                if (bytes_read < 0) {
-                    perror("Failed to read file");
-                    break;
-                } else if (bytes_read == 0) {
-                    no_finito = false;
-                    continue;
-                }
-                buffer_write_adv(state_buffer, bytes_read);
-                // escribo pipe
-                if (buffer_can_read(state_buffer) && FD_ISSET(cli_data->pop3->trans->trans_in, &readfds)) {
-                    bytes_sent = write(cli_data->pop3->trans->trans_out, buff, state_buffer->write - state_buffer->read); // mando todo lo que tenga por mandar
-                    buffer_read_adv(state_buffer, bytes_sent);
-                }
-            }
+    write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, "\r\n.\r\n", 5);
 
-            // leo pipe
-            if ( FD_ISSET(cli_data->pop3->trans->trans_out, &writefds) ){
-                bytes_read = read( cli_data->pop3->trans->trans_out, cli_data->pop3->trans->send_trans_buffer, sizeof(BUFFER_SIZE) );
-                if (bytes_read < 0) {
-                    continue;
-                }
-                bytes_sent = write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, cli_data->pop3->trans->send_trans_buffer, bytes_read);
-                if (bytes_sent < 0) {
-                    perror("Failed to send file data");
-                    break;
-                }
-            }
-            
-            buffer_compact(state_buffer);
-        }else{
-            bytes_read = read(file, buff, sizeof(BUFFER_SIZE)); // -1 por seguro
-            if (bytes_read < 0) {
-                perror("Failed to read file");
-                break;
-            } else if (bytes_read == 0) {
-                no_finito = false;
-                continue;
-            }
-            bytes_sent = write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, buff, bytes_read);
+    close(file);
+    printf("File transfer complete.\n");
+}
+
+void send_file_process(const char *filename) {
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        perror("Failed to fork for send_file");
+        return;
+    }
+
+    if (pid == 0) { 
+        send_file(filename); 
+        exit(EXIT_SUCCESS); 
+    } else {
+        printf("Started file transfer process with PID: %d\n", pid);
+    }
+}
+
+int setup_pipes(int pipe_parent_to_child[2], int pipe_child_to_parent[2]) {
+    if (pipe(pipe_parent_to_child) == -1 || pipe(pipe_child_to_parent) == -1) {
+        perror("Failed to create pipes");
+        return -1;
+    }
+    return 0;
+}
+
+
+pid_t fork_and_exec(int pipe_parent_to_child[2], int pipe_child_to_parent[2]) {
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("Failed to fork");
+        return -1;
+    }
+
+    if (pid == 0) {
+        if (dup2(pipe_parent_to_child[0], STDIN_FILENO) == -1) {
+            perror("Failed to redirect stdin");
+            exit(EXIT_FAILURE);
+        }
+        if (dup2(pipe_child_to_parent[1], STDOUT_FILENO) == -1) {
+            perror("Failed to redirect stdout");
+            exit(EXIT_FAILURE);
+        }
+
+        close(pipe_parent_to_child[0]);
+        close(pipe_child_to_parent[1]);
+
+        char *argv[] = {cli_data->pop3->trans->trans_binary_path, "--unbuffered", cli_data->pop3->trans->trans_args, NULL};
+        execve(argv[0], argv, NULL);
+
+        perror("Failed to execute transformation process");
+        exit(EXIT_FAILURE);
+    }
+
+    close(pipe_parent_to_child[0]); 
+    close(pipe_child_to_parent[1]); 
+    return pid;
+}
+
+
+void transfer_with_transformation(int file, int pipe_parent_to_child[2], int pipe_child_to_parent[2]) {
+    ssize_t bytes_read, bytes_sent, aux_read;
+    while ((bytes_read = read(file, cli_data->recv_trans_buffer, sizeof(cli_data->recv_trans_buffer))) > 0) {
+        ssize_t bytes_written = write(pipe_parent_to_child[1], cli_data->recv_trans_buffer, bytes_read);
+        if (bytes_written < 0) {
+            perror("Failed to write to pipe");
+            break;
+        }
+
+        while ((aux_read = read(pipe_child_to_parent[0], cli_data->send_trans_buffer, sizeof(cli_data->send_trans_buffer))) > 0) {
+            bytes_sent = write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, cli_data->send_trans_buffer, aux_read);
             if (bytes_sent < 0) {
-                perror("Failed to send file data");
+                perror("Failed to send file data through socket");
                 break;
             }
         }
-        if (cli_data->pop3->trans_enabled)
-            write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, "\n\r", 2);
-        
+
+        if (aux_read < 0) {
+            perror("Failed to read from pipe");
+            break;
+        }
     }
 
-    if ( cli_data->pop3->trans_enabled ){
-        write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, "\n\r", 2);
+    if (bytes_read < 0) {
+        perror("Failed to read file");
     }
-
-    close(file);
-    free(state_buffer);
-    printf("File transfer complete.\n");
 }
+
+void transfer_without_transformation(int file) {
+    ssize_t bytes_read, bytes_sent;
+    char buffer[BUFFER_SIZE];
+    while ((bytes_read = read(file, buffer, sizeof(buffer))) > 0) {
+        bytes_sent = write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, buffer, bytes_read);
+        if (bytes_sent < 0) {
+            perror("Failed to send file data through socket");
+            break;
+        }
+    }
+
+    if (bytes_read < 0) {
+        perror("Failed to read file");
+    }
+}
+
+
 
 void check_if_ready_output(){
     ssize_t bytes_read, bytes_sent;
@@ -289,22 +344,22 @@ void check_if_ready_output(){
 
     fd_set writefds;
     FD_ZERO(&writefds);
-    FD_SET(cli_data->pop3->trans->trans_out, &writefds);
-    int activity = select(cli_data->pop3->trans->trans_out + 1,NULL, &writefds, NULL, NULL);
+    FD_SET(cli_data->trans_out, &writefds);
+    int activity = select(cli_data->trans_out + 1,NULL, &writefds, NULL, NULL);
     if (activity < 0) {
         perror("Error en select");
         exit(1);
     }
 
-    if ( FD_ISSET(cli_data->pop3->trans->trans_out, &writefds) ){
-        bytes_read = read( cli_data->pop3->trans->trans_out, cli_data->pop3->trans->send_trans_buffer, sizeof(BUFFER_SIZE) );
+    if ( FD_ISSET(cli_data->trans_out, &writefds) ){
+        bytes_read = read( cli_data->trans_out, cli_data->send_trans_buffer, sizeof(BUFFER_SIZE) );
         if (bytes_read < 0) {
             return;
         }else if (bytes_read == 0){
             write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, "\n\r", 2);
             return;
         }
-        bytes_sent = write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, cli_data->pop3->trans->send_trans_buffer, bytes_read);
+        bytes_sent = write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, cli_data->send_trans_buffer, bytes_read);
         if (bytes_sent < 0) {
             perror("Failed to send file data");
             return;
@@ -366,7 +421,7 @@ int view_message( int file_number ){
 
     sprintf(buffer, "%s%s/%s/%s", pop3->base_dir, cli_data->user->name, dir == NEW ? "new" : dir == CUR ? "cur" : "tmp", file->name);
 
-    send_file( buffer );
+    send_file_process( buffer );
     return 0;
 }
 
@@ -859,8 +914,7 @@ void handle_client(Client_data* client_data ) {
             write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
             buffer_compact(b);
     }
-    buffer_compact(b); // reinicio el buffer para que no haya problemas
-    check_if_ready_output();    
+    buffer_compact(b); // reinicio el buffer para que no haya problemas 
     
 end:
     free(b);

@@ -88,12 +88,10 @@ typedef struct maildir {
     file_list_header* new;
     file_list_header* tmp;
 } maildir;
+
 typedef struct transformation_structure {  
     char* trans_binary_path;
     char* trans_args;
-    int trans_in;
-    int trans_out;
-    char send_trans_buffer[BUFFER_SIZE];
 }transformation_structure;
 
 typedef struct pop3_structure {
@@ -125,6 +123,11 @@ typedef struct Client_data {
     user_list* user;
     maildir* maildir;
     
+    int trans_in;
+    int trans_out;
+    char recv_trans_buffer[BUFFER_SIZE];
+    char send_trans_buffer[BUFFER_SIZE];
+
     char send_buffer[BUFFER_SIZE];
     char recv_buffer[BUFFER_SIZE];
     
