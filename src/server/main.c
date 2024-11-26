@@ -11,7 +11,6 @@
 
 static int client_count = 0;
 static int historic_client_count = 0;
-
 static bool done = false;
 
 
@@ -69,6 +68,37 @@ int handle_close_client(int index) {
 
     client_count--;
     return 0;
+}
+
+void log_connection(const char *filename, const char *message) {
+    FILE *logfile = fopen(filename, "a");
+    if (logfile == NULL) {
+        perror("Error opening log file");
+        exit(EXIT_FAILURE);
+    }
+
+    time_t now = time(NULL);
+    char *timestamp = ctime(&now);
+    timestamp[strcspn(timestamp, "\n")] = '\0';
+
+    fprintf(logfile, "[%s] %s\n", timestamp, message);
+
+    fclose(logfile);
+}
+
+void get_client_ip(const struct sockaddr_storage *client_addr, char *ip_str, size_t ip_str_size) {
+    if (client_addr->ss_family == AF_INET) {
+        // IPv4
+        struct sockaddr_in *addr_in = (struct sockaddr_in *)client_addr;
+        inet_ntop(AF_INET, &(addr_in->sin_addr), ip_str, ip_str_size);
+    } else if (client_addr->ss_family == AF_INET6) {
+        // IPv6
+        struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6 *)client_addr;
+        inet_ntop(AF_INET6, &(addr_in6->sin6_addr), ip_str, ip_str_size);
+    } else {
+        // Unknown family
+        strncpy(ip_str, "Unknown AF", ip_str_size);
+    }
 }
 
 int main( const int argc, char **argv ) {
@@ -197,11 +227,15 @@ int main( const int argc, char **argv ) {
                             printf("Too many clients\n");
                             close(client_socket);
                         } else {
+                            char client_ip[INET6_ADDRSTRLEN]; // Buffer for the IP address
+                            get_client_ip(&client_addr, client_ip, sizeof(client_ip));
+
                             printf("Client connected.\n");
                             clients[client_count].cli_socket = client_socket;
                             write_socket_buffer(clients[client_count].send_buffer, clients[client_count].cli_socket, "+OK POP3 server ready\r\n", 23);
                             client_count++;
                             historic_client_count++;
+                            log_connection("connections.log", client_ip);
                         }
                     }
                 } else {
