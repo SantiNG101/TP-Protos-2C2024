@@ -212,6 +212,7 @@ int main( const int argc, char **argv ) {
     free(metrics);
     free_pop3_structure(pop3_struct);
     close(server_socket);
-
+    close(manager_server_socket);
+    
     return 0;
 }
