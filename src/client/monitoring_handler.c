@@ -6,14 +6,14 @@
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
-#include "monitoring_handler.h"
+#include "./header/monitoring_handler.h"
 
 #define BUFFER_SIZE 256
 
 #define LINE_END "\r\n"
 #define CLIENT_IDENTIFIER "pop3_monitor"
-#define AUTH_USER_CMD "USER your_username" LINE_END
-#define AUTH_PASS_CMD "PASS your_password" LINE_END
+#define AUTH_USER_CMD "USER user1" LINE_END
+#define AUTH_PASS_CMD "PASS pass1" LINE_END
 #define STATUS_CMD "STAT" LINE_END
 #define TERMINATE_CMD "QUIT" LINE_END
 
@@ -73,11 +73,19 @@ int connect_to_pop3_server(char *address, char *port_number) {
     }
 
     // Proceso de autenticación
-    if (send_command(AUTH_USER_CMD) == 1 || send_command(AUTH_PASS_CMD) == 1) {
+    if (send_command(AUTH_USER_CMD) == 1) {
         perror("Authentication failed");
         return AUTH_ERROR;
     }
 
+    sleep(1);
+
+    if (send_command(AUTH_PASS_CMD) == 1) {
+        perror("Authentication failed");
+        return AUTH_ERROR;
+    }
+
+    sleep(1);
     // Llamada para obtener estadísticas del servidor
     if (retrieve_pop3_stats() != 0) { // Manejo de errores al obtener estadísticas
         perror("Failed to retrieve POP3 statistics");
@@ -143,6 +151,7 @@ int retrieve_pop3_stats(void) {
     if (send_command(STATUS_CMD) == 0) {
 
         // Procesar respuesta utilizando sscanf
+        printf("Response: %s\n", response_buffer);
         if (sscanf(response_buffer, "+OK %d %d", &total_messages, &total_bytes) != 2) {
             perror("Failed to parse STAT response");
             return STAT_ERROR; // Indica error al analizar la respuesta

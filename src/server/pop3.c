@@ -728,11 +728,11 @@ void handle_client(Client_data* client_data ) {
         }
     }
     // dependiendo si se tiene \n => 2 o \r\n => 3
-    if ( bytes_received < 2 ){
+    if ( bytes_received < 3 ){
         return;
     }
     // -2 por \r\n ;; -1 por el \n
-    buffer_write_adv(b, bytes_received-1);
+    buffer_write_adv(b, bytes_received-2);
     buffer_write(b, '\0'); 
     char* aux = buffer_read_ptr( b, &(size_t){ 4 } );
     int command = get_command_value(aux);
