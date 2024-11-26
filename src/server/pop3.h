@@ -134,6 +134,7 @@ typedef struct Client_data {
     int trans_in;
     int trans_out;
 
+    char *ip;
     char send_trans_buffer[BUFFER_SIZE];
 
     char send_buffer[BUFFER_SIZE*2];
