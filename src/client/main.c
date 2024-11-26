@@ -18,23 +18,54 @@ int main(int argc, char *argv[]) {
     }
     printf("Connected and authenticated successfully.\n");
 
-    if (retrieve_pop3_stats() != 0) {
-        fprintf(stderr, "Error retrieving statistics from the server.\n");
-        disconnect_from_server();
-        return EXIT_FAILURE;
-    }
 
 
     printf("Verifying server status...\n");
     verify_server_status();
 
-    printf("Server Status: %s\n", get_connection_status());
-    printf("Response Time: %.2f ms\n", get_response_time());
-    printf("Total Messages: %d\n", get_total_messages());
-    printf("Total Bytes: %d\n", get_total_bytes());
+    while (get_connection_status() == ONLINE) {
 
-    printf("Disconnecting from server...\n");
-    disconnect_from_server();
+        char CMD[BUFFER_SIZE];
+        int state;
+
+        printf("Server Status: %s\n", get_connection_status());
+        printf("Response Time: %.2f ms\n", get_response_time());
+
+        printf("Enter a command (STAT, INFO, QUIT): ");
+        scanf("%s", CMD);
+
+        if ( strncmp(CMD, "QUIT", 4) == 0 ){
+            printf("Disconnecting from server...\n");
+            disconnect_from_server();
+            break;
+        }
+
+        state = send_command(CMD);
+        if (state == 1){
+            printf("Error sending command.\n");
+            verify_server_status();
+            continue;
+        }
+
+        state = recv_response(CMD);
+        if (state == 1){
+            printf("Error receiving response.\n");
+        }
+        verify_server_status();
+    }
+
+    // a modificar: port / host / base_dir / trans_enabled
+        /*
+        PORT <port number>
+        HOST <name>
+        DIRR <path>
+        TRAN <1/0>
+        IPV6 <new_ip>
+        METR
+        INFO => de base_dir, host, ip actual
+        LOGG
+    */
+
     printf("Disconnected successfully.\n");
 
     return EXIT_SUCCESS;
