@@ -128,8 +128,8 @@ typedef struct Client_data {
 
     char send_trans_buffer[BUFFER_SIZE];
 
-    char send_buffer[BUFFER_SIZE];
-    char recv_buffer[BUFFER_SIZE];
+    char send_buffer[BUFFER_SIZE*2];
+    char recv_buffer[BUFFER_SIZE*2];
     
     enum client_state client_state;
 } Client_data;

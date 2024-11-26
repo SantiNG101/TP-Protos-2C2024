@@ -703,15 +703,19 @@ int parse_number(buffer* buff){
 
 void handle_client(Client_data* client_data ) {
     ssize_t bytes_received;
-    buffer *b = malloc(sizeof(buffer));
-    buffer_init(b, BUFFER_SIZE, client_data->recv_buffer);
+    
 
     pop3 = client_data->pop3;
     cli_data = client_data;
 
     char* response;
-    bytes_received = read_socket_buffer(client_data->recv_buffer, client_data->cli_socket, BUFFER_SIZE);
-    //bytes_received = recv(cli_socket, buffer1, BUFFER_SIZE, 0);
+    char buff[BUFFER_SIZE];
+    char command[BUFFER_SIZE*2];
+    strcpy(command, client_data->recv_buffer);
+    client_data->recv_buffer[0] = '\0';
+
+    bytes_received = read_socket_buffer(buff, client_data->cli_socket, BUFFER_SIZE);
+
     // checkeo si se desconecto o hubo un error
     if (bytes_received <= 0) {
         // Error o desconexión del cliente
@@ -721,182 +725,200 @@ void handle_client(Client_data* client_data ) {
             perror("recv error");
         }
     }
-    // dependiendo si se tiene \n => 2 o \r\n => 3
-    if ( bytes_received < 3 ){
-        return;
-    }
-    // -2 por \r\n ;; -1 por el \n
-    buffer_write_adv(b, bytes_received-2);
-    buffer_write(b, '\0'); 
-    char* aux = buffer_read_ptr( b, &(size_t){ 4 } );
-    int command = get_command_value(aux);
-    buffer_read_adv( b, (size_t) 4 );
-    
+    char* aux = buff;
+    char* aux_init=aux;
+    // confirmo que tengo un comando
+    while( *aux != '\0' ){
+        if ( *aux == '\n' ){
+            if ( aux != buff && *(aux-1) == '\r'){
+                *(aux-1) = '\0';
+            }
+            *aux = '\0';
+            strcat(command, aux_init);
 
-    switch(command){
-        case USER:
-            if ( client_data->client_state != AUTHORIZATION ){
-                client_data->client_state = AUTHORIZATION;
-            }
-            if ( buffer_read( b ) == '\0' ){
-                response = "-ERR Missing username\r\n";
-                write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                //sendcli_socket, response, strlen(response), 0);
-            } else {
-                if ( client_validation( b, client_data ) ){
-                    response = "-ERR User not found\r\n";
-                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                    //sendcli_socket, response, strlen(response), 0);
-                } else {
-                    response = "+OK User accepted, password needed\r\n";
-                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                    //sendcli_socket, response, strlen(response), 0);
-                }
-            }
-            break;
-        case PASS:
-            if ( client_data->client_state != AUTHORIZATION ){
-                response = "-ERR You had already logged on\r\n";
-                write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                //sendcli_socket, response, strlen(response), 0);
-                break;
-            }
-            if ( buffer_read( b ) == '\0' ){
-                response = "-ERR Missing password\r\n";
-                write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                //sendcli_socket, response, strlen(response), 0);
-                break;
-            } else {
-                if ( password_validation( b, client_data ) ){
-                    response = "-ERR Password incorrect\r\n";
-                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                    //sendcli_socket, response, strlen(response), 0);
-                } else {
-                    response = "+OK Password accepted\r\n";
-                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                    //sendcli_socket, response, strlen(response), 0);
-                    client_data->client_state = TRANSACTION;
-                    if ( load_user_structure() ){
-                        response = "-ERR Error loading user structure\r\n";
+            buffer *b = malloc(sizeof(buffer));
+            buffer_init(b, BUFFER_SIZE*2, command);
+            
+            buffer_write_adv(b, strlen(command));
+            //char* aux = buffer_read_ptr( b, &(size_t){ 4 } );
+            int comm = get_command_value(command);
+            buffer_read_adv( b, (size_t) 4 );
+
+            switch(comm){
+                case USER:
+                    if ( client_data->client_state != AUTHORIZATION ){
+                        client_data->client_state = AUTHORIZATION;
+                    }
+                    if ( buffer_read( b ) == '\0' ){
+                        response = "-ERR Missing username\r\n";
                         write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                         //sendcli_socket, response, strlen(response), 0);
+                    } else {
+                        if ( client_validation( b, client_data ) ){
+                            response = "-ERR User not found\r\n";
+                            write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                            //sendcli_socket, response, strlen(response), 0);
+                        } else {
+                            response = "+OK User accepted, password needed\r\n";
+                            write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                            //sendcli_socket, response, strlen(response), 0);
+                        }
                     }
-                }
-            }
-            break;
-        case RSET:
-            if ( client_data->client_state != TRANSACTION ){
-                response = "-ERR You must log in first\r\n";
-                write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                //sendcli_socket, response, strlen(response), 0);
-                break;
-            }
-            unmark_all();
-            break;
-        case STAT:
-            if ( client_data->client_state != TRANSACTION ){
-                response = "-ERR You must log in first\r\n";
-                write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                //sendcli_socket, response, strlen(response), 0);
-                break;
-            }
-            stat_handeler();
-            break;
-        case LIST:
-            if ( client_data->client_state != TRANSACTION ){
-                response = "-ERR You must log in first\r\n";
-                write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                //sendcli_socket, response, strlen(response), 0);
-                break;
-            }
-            if ( buffer_read( b ) == '\0' ){
-                list_messages(-1);
-                break;
-            } else {
-                int num = parse_number( b );
-                if ( num == 0 ){
-                    response = "-ERR Argument Error \r\n";
+                    break;
+                case PASS:
+                    if ( client_data->client_state != AUTHORIZATION ){
+                        response = "-ERR You had already logged on\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        //sendcli_socket, response, strlen(response), 0);
+                        break;
+                    }
+                    if ( buffer_read( b ) == '\0' ){
+                        response = "-ERR Missing password\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        //sendcli_socket, response, strlen(response), 0);
+                        break;
+                    } else {
+                        if ( password_validation( b, client_data ) ){
+                            response = "-ERR Password incorrect\r\n";
+                            write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                            //sendcli_socket, response, strlen(response), 0);
+                        } else {
+                            response = "+OK Password accepted\r\n";
+                            write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                            //sendcli_socket, response, strlen(response), 0);
+                            client_data->client_state = TRANSACTION;
+                            if ( load_user_structure() ){
+                                response = "-ERR Error loading user structure\r\n";
+                                write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                                //sendcli_socket, response, strlen(response), 0);
+                            }
+                        }
+                    }
+                    break;
+                case RSET:
+                    if ( client_data->client_state != TRANSACTION ){
+                        response = "-ERR You must log in first\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        //sendcli_socket, response, strlen(response), 0);
+                        break;
+                    }
+                    unmark_all();
+                    break;
+                case STAT:
+                    if ( client_data->client_state != TRANSACTION ){
+                        response = "-ERR You must log in first\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        //sendcli_socket, response, strlen(response), 0);
+                        break;
+                    }
+                    stat_handeler();
+                    break;
+                case LIST:
+                    if ( client_data->client_state != TRANSACTION ){
+                        response = "-ERR You must log in first\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        //sendcli_socket, response, strlen(response), 0);
+                        break;
+                    }
+                    if ( buffer_read( b ) == '\0' ){
+                        list_messages(-1);
+                        break;
+                    } else {
+                        int num = parse_number( b );
+                        if ( num == 0 ){
+                            response = "-ERR Argument Error \r\n";
+                            write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                            //sendcli_socket, response, strlen(response), 0);
+                            break;
+                        }
+                        list_messages(num);
+                    }
+                    break;
+                case RETR:
+                    if ( client_data->client_state != TRANSACTION ){
+                        response = "-ERR You must log in first\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        //sendcli_socket, response, strlen(response), 0);
+                        break;
+                    }
+                    if ( buffer_read( b ) == '\0' ){
+                        response = "-ERR Argument Error \r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        //sendcli_socket, response, strlen(response), 0);
+                        break;
+                    } else {
+                        // parseo el numero 
+                        int num = parse_number( b );
+                        if ( num == 0 ){
+                            response = "-ERR Argument Error \r\n";
+                            write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                            //sendcli_socket, response, strlen(response), 0);
+                            break;
+                        }
+                        view_message(num);
+                    }
+                    break;
+                case DELE:
+                    if ( client_data->client_state != TRANSACTION ){
+                        response = "-ERR You must log in first\r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        //sendcli_socket, response, strlen(response), 0);
+                        break;
+                    }
+                    if ( buffer_read( b ) == '\0' ){
+                        response = "-ERR Argument Error \r\n";
+                        write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                        //sendcli_socket, response, strlen(response), 0);
+                        break;
+                    } else {
+                        // parseo el numero 
+                        int num = parse_number( b );
+                        if ( num == 0 ){
+                            response = "-ERR Argument Error \r\n";
+                            write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                            //sendcli_socket, response, strlen(response), 0);
+                            break;
+                        }
+                        // marca como borrado el mensaje
+                        delete_message(num);
+                    }
+                    break;
+                case NOOP:
+                    // Retorna un OK!, no hace nada
+                    response = "OK!!\r\n";
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                     //sendcli_socket, response, strlen(response), 0);
                     break;
-                }
-                list_messages(num);
-            }
-            break;
-        case RETR:
-            if ( client_data->client_state != TRANSACTION ){
-                response = "-ERR You must log in first\r\n";
-                write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                //sendcli_socket, response, strlen(response), 0);
-                break;
-            }
-            if ( buffer_read( b ) == '\0' ){
-                response = "-ERR Argument Error \r\n";
-                write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                //sendcli_socket, response, strlen(response), 0);
-                break;
-            } else {
-                // parseo el numero 
-                int num = parse_number( b );
-                if ( num == 0 ){
-                    response = "-ERR Argument Error \r\n";
+                case QUIT:
+                    response = "+OK Goodbye\r\n";
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                     //sendcli_socket, response, strlen(response), 0);
-                    break;
-                }
-                view_message(num);
-            }
-            break;
-        case DELE:
-            if ( client_data->client_state != TRANSACTION ){
-                response = "-ERR You must log in first\r\n";
-                write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                //sendcli_socket, response, strlen(response), 0);
-                break;
-            }
-            if ( buffer_read( b ) == '\0' ){
-                response = "-ERR Argument Error \r\n";
-                write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                //sendcli_socket, response, strlen(response), 0);
-                break;
-            } else {
-                // parseo el numero 
-                int num = parse_number( b );
-                if ( num == 0 ){
-                    response = "-ERR Argument Error \r\n";
+                    client_data->client_state = CLOSING;
+                    delete_marked();
+                    destroy_maildir();
+                    printf("Client disconnected.\n");
+                    close(client_data->cli_socket);
+                    free(b);
+                    return;
+                default:
+                    response = "-ERR Unknown command\r\n";
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-                    //sendcli_socket, response, strlen(response), 0);
-                    break;
-                }
-                // marca como borrado el mensaje
-                delete_message(num);
+                    buffer_compact(b);
             }
-            break;
-        case NOOP:
-            // Retorna un OK!, no hace nada
-            response = "OK!!\r\n";
-            write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-            //sendcli_socket, response, strlen(response), 0);
-            break;
-        case QUIT:
-            response = "+OK Goodbye\r\n";
-            write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-            //sendcli_socket, response, strlen(response), 0);
-            client_data->client_state = CLOSING;
-            delete_marked();
-            destroy_maildir();
-            printf("Client disconnected.\n");
-            close(client_data->cli_socket);
-            goto end;
-        default:
-            response = "-ERR Unknown command\r\n";
-            write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-            buffer_compact(b);
+            free(b);
+            command[0] = '\0';
+
+            aux_init = aux+1;
+        }
+        aux=aux+1;
     }
-    buffer_compact(b); // reinicio el buffer para que no haya problemas 
+    if ( aux_init != aux ){
+        strcat(client_data->recv_buffer, aux_init);
+    }
+
+
     
-end:
-    free(b);
+
 }
 
 int client_validation(buffer* buff, Client_data* client_data) {
