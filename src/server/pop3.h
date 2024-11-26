@@ -122,10 +122,10 @@ typedef struct Client_data {
     struct pop3_structure* pop3;
     user_list* user;
     maildir* maildir;
-    
+
     int trans_in;
     int trans_out;
-    char recv_trans_buffer[BUFFER_SIZE];
+
     char send_trans_buffer[BUFFER_SIZE];
 
     char send_buffer[BUFFER_SIZE];
