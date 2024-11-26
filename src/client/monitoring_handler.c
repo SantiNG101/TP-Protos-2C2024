@@ -99,7 +99,7 @@ char* str_checker(char* str, char delim, int* i) {
         (*i)++;  
     }
     
-    if (str[*i] == '\0') {
+    if (str[*i] == '\0' && *i == 0) {
         return NULL;
     }
     
@@ -120,9 +120,9 @@ char** separator(char* str, char delim, int type) {
         }
 
         result[0] = str_checker(str, delim, &i);
-        result[1] = str_checker(str, delim, &i);
-        result[2] = str_checker(str, delim, &i);
-        result[3] = str_checker(str, delim, &i);
+        result[1] = str_checker(str+i, delim, &i);
+        result[2] = str_checker(str+i, delim, &i);
+        result[3] = str_checker(str+i, delim, &i);
         
         return result;
     }
@@ -134,8 +134,8 @@ char** separator(char* str, char delim, int type) {
         }
 
         result[0] = str_checker(str, delim, &i);
-        result[1] = str_checker(str, delim, &i);
-        result[2] = str_checker(str, delim, &i);
+        result[1] = str_checker(str+i, delim, &i);
+        result[2] = str_checker(str+i, delim, &i);
 
         return result;
     }
@@ -175,6 +175,8 @@ int recv_response(char* command){
     if (state == -1){
         return 1;
     }
+    memset(response_buffer, 0, BUFFER_SIZE);
+
     if (  state == LOGG ){
         while(1){
             int bytes_received = recv(pop3_socket, response_buffer, BUFFER_SIZE - 1, 0);
@@ -187,6 +189,10 @@ int recv_response(char* command){
             }
             response_buffer[bytes_received] = '\0';
             printf("%s", response_buffer);
+            if (strstr(response_buffer, ".\r\n") != NULL) {
+                break; // Encuentra el final del mensaje y sale del bucle
+        }
+        
         }
     }else {
 

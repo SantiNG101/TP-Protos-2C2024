@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
         printf("Server Status: %d\n", get_connection_status());
         printf("Response Time: %.2f ms\n", get_response_time());
 
-        printf("Enter a command (STAT, INFO, QUIT): ");
+        printf("Enter a command (METR, LOGG, PORT, HOST, IPV6, TRAN, DIRR, INFO, QUIT): ");
 
         fgets(CMD, BUFFER_SIZE, stdin);
         // Remove newline character if it exists
