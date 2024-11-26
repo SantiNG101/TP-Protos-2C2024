@@ -938,7 +938,7 @@ void handle_client(Client_data* client_data, Metrics* metrics) {
                     break;
                 case NOOP:
                     // Retorna un OK!, no hace nada
-                    response = "OK!!\r\n";
+                    response = "+OK\r\n";
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                     //sendcli_socket, response, strlen(response), 0);
                     break;
@@ -948,7 +948,7 @@ void handle_client(Client_data* client_data, Metrics* metrics) {
                         write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                         break;
                     }
-                    response = "+OK Port command\r\n";
+                    response = "+OK\r\n";
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                     break;
                 case HOST:
@@ -957,8 +957,13 @@ void handle_client(Client_data* client_data, Metrics* metrics) {
                         write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                         break;
                     }
-                    response = "+OK Host command\r\n";
-                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                    char * host = calloc(1, strlen(command+5));
+                    strcpy(host, command+5);
+
+                    pop3->host = host;
+
+                    response = "+OK\r\n";
+                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response)); 
                     break;
                 case DIRR:
                     if ( client_data->client_state != MANAGER ){
@@ -966,7 +971,12 @@ void handle_client(Client_data* client_data, Metrics* metrics) {
                         write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                         break;
                     }
-                    response = "+OK Dir command\r\n";
+                    char * new_dir = calloc(1, strlen(command+5));
+                    strcpy(new_dir, command+5);
+
+                    pop3->base_dir = new_dir;
+
+                    response = "+OK\r\n";
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                     break;
                 case TRAN:
@@ -975,15 +985,19 @@ void handle_client(Client_data* client_data, Metrics* metrics) {
                         write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                         break;
                     }
-                break;
+                    pop3->trans_enabled = atoi(command+5) == 1 ? true : false;
+                    response = "+OK\r\n";
+                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                    break;
                 case IPV6:
                     if ( client_data->client_state != MANAGER ){
                         response = "-ERR You lack privillege\r\n";
                         write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                         break;
                     }
-                    response = "+OK IPV6 command\r\n";
+                    response = "+OK\r\n";
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+
                     break;
                 case INFO:
                     if ( client_data->client_state != MANAGER ){
@@ -991,7 +1005,7 @@ void handle_client(Client_data* client_data, Metrics* metrics) {
                         write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                         break;
                     }
-                    response = "+OK Info command\r\n";
+                    sprintf(response, "+OK %s;%s;%s\r\n", pop3->host, pop3->base_dir, pop3->ip);
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                     break;
                 case METR:
@@ -1000,7 +1014,7 @@ void handle_client(Client_data* client_data, Metrics* metrics) {
                         write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                         break;
                     }
-                    response = "+OK Metrics command\r\n";
+                    sprintf(response, "+OK %d;%d;%d;%d\r\n", metrics->total_messages, metrics->total_bytes, metrics->total_historic_connections, metrics->max_consecutive_connections);
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
 
                     break;
