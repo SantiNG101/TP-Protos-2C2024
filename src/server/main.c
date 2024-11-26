@@ -10,6 +10,8 @@
 #define MAX_EVENTS 512
 
 static int client_count = 0;
+static int historic_client_count = 0;
+
 static bool done = false;
 
 
@@ -140,6 +142,7 @@ int main( const int argc, char **argv ) {
                             clients[client_count].cli_socket = client_socket;
                             write_socket_buffer(clients[client_count].send_buffer, clients[client_count].cli_socket, "+OK POP3 server ready\r\n", 23);
                             client_count++;
+                            historic_client_count++;
                         }
                     }
                 } else {

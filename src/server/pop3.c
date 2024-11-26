@@ -320,8 +320,6 @@ void transfer_without_transformation(int file) {
     }
 }
 
-
-
 void check_if_ready_output(){
     ssize_t bytes_read, bytes_sent;
     if ( !cli_data->pop3->trans_enabled )
@@ -372,7 +370,6 @@ enum pop3_directory {
     CUR,
     TMP
 };
-
 
 int view_message( int file_number ){
 
@@ -563,7 +560,6 @@ int delete_message(int file_number){
     return 0;
 }
 
-
 file_list_header* create_file_list(const char* directory_path) {
     DIR *dir;
     struct dirent *entry;
@@ -704,8 +700,6 @@ int parse_number(buffer* buff){
 
     return num;
 }
-
-
 
 void handle_client(Client_data* client_data ) {
     ssize_t bytes_received;
@@ -959,6 +953,12 @@ void free_pop3_structure( pop3_structure* pop3_struct ){
         free(aux->pass);
         free(aux);
         aux = next;
+    }
+    if(pop3_struct->trans_enabled){
+        if(pop3_struct->trans->trans_binary_path != NULL)
+            free(pop3_struct->trans->trans_binary_path);
+        if(pop3_struct->trans->trans_args != NULL)
+            free(pop3_struct->trans->trans_args);
     }
     free(pop3_struct->trans);
     free(pop3_struct->user_list);

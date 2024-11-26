@@ -151,7 +151,6 @@ int retrieve_pop3_stats(void) {
     if (send_command(STATUS_CMD) == 0) {
 
         // Procesar respuesta utilizando sscanf
-        printf("Response: %s\n", response_buffer);
         if (sscanf(response_buffer, "+OK %d %d", &total_messages, &total_bytes) != 2) {
             perror("Failed to parse STAT response");
             return STAT_ERROR; // Indica error al analizar la respuesta
