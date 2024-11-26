@@ -1011,6 +1011,7 @@ void handle_client(Client_data* client_data, Metrics* metrics) {
                         break;
                     }
                     response = "+OK Log command\r\n";
+                    write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                     send_file_process(LOGGER_FILE);
                     break;
                 case QUIT:
