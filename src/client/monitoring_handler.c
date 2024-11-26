@@ -8,6 +8,10 @@
 #include <unistd.h>
 #include "./header/monitoring_handler.h"
 
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+
 #define BUFFER_SIZE 256
 
 #define LINE_END "\r\n"
@@ -39,27 +43,35 @@ int total_connections =0;
 char response_buffer[BUFFER_SIZE] = {'\0'};
 
 static int establish_socket_connection(char *address, char *port_number) {
-    int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd == -1) {
-        perror("Error creating socket");
+    struct addrinfo hints, *result, *rp;
+    int socket_fd;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC; 
+    hints.ai_socktype = SOCK_STREAM;   
+
+    int ret = getaddrinfo(address, port_number, &hints, &result);
+    if (ret != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(ret));
         return SOCKET_ERROR;
     }
 
-    struct sockaddr_in server_address;
-    memset(&server_address, 0, sizeof(server_address));
-    int port_int = atoi(port_number);
+    for (rp = result; rp != NULL; rp = rp->ai_next) {
+        socket_fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (socket_fd == -1)
+            continue;  
 
-    if (inet_pton(AF_INET, address, &server_address.sin_addr) == -1) {
-        perror("Invalid address format");
-        close(socket_fd);
-        return SOCKET_ERROR;
+        if (connect(socket_fd, rp->ai_addr, rp->ai_addrlen) != -1) {
+            break;  
+        }
+
+        close(socket_fd); 
     }
-    server_address.sin_port = htons(port_int);
-    server_address.sin_family = AF_INET;
 
-    if (connect(socket_fd, (struct sockaddr*)&server_address, sizeof(server_address)) == -1) {
-        perror("Connection failed");
-        close(socket_fd);
+    freeaddrinfo(result);
+
+    if (rp == NULL) {
+        fprintf(stderr, "Could not connect to any address\n");
         return SOCKET_ERROR;
     }
 
@@ -68,24 +80,16 @@ static int establish_socket_connection(char *address, char *port_number) {
 
 int connect_to_pop3_server(char *address, char *port_number) {
     pop3_socket = establish_socket_connection(address, port_number);
-    if (pop3_socket == SOCKET_ERROR) {
+    if (pop3_socket == SOCKET_ERROR || recv_initial_response() != 0) {
         return SOCKET_ERROR;
     }
 
     // Proceso de autenticación
-    if (send_command(AUTH_USER_CMD) == 1) {
+    if (send_command(AUTH_USER_CMD) == 1 || send_command(AUTH_PASS_CMD) == 1) {
         perror("Authentication failed");
         return AUTH_ERROR;
     }
 
-    sleep(1);
-
-    if (send_command(AUTH_PASS_CMD) == 1) {
-        perror("Authentication failed");
-        return AUTH_ERROR;
-    }
-
-    sleep(1);
     // Llamada para obtener estadísticas del servidor
     if (retrieve_pop3_stats() != 0) { // Manejo de errores al obtener estadísticas
         perror("Failed to retrieve POP3 statistics");
@@ -93,6 +97,17 @@ int connect_to_pop3_server(char *address, char *port_number) {
     }
 
     connection_status = ONLINE;
+    return 0;
+}
+
+int recv_initial_response(void) {
+    int bytes_received = recv(pop3_socket, response_buffer, BUFFER_SIZE - 1, 0);
+    if (bytes_received <= 0) {
+        perror("Failed to receive server greeting");
+        return SOCKET_ERROR;
+    }
+    response_buffer[bytes_received] = '\0';
+    printf("Server greeting: %s\n", response_buffer);
     return 0;
 }
 

@@ -9,7 +9,7 @@
 // Funciones para la conexión y desconexión del servidor POP3
 int connect_to_pop3_server(char *address, char *port_number);
 void disconnect_from_server(void);
-
+int recv_initial_response(void); 
 // Funciones para enviar comandos al servidor
 int send_command(char* command);
 
