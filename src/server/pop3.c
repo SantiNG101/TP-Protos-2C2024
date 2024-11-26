@@ -16,9 +16,9 @@ Client_data* cli_data;
 int client_validation(buffer* buff, Client_data* client_data);
 int password_validation(buffer* buff, Client_data* client_data);
 void send_file(const char *filename);
-int setup_pipes(int pipe_parent_to_child[2], int pipe_child_to_parent[2]);
-pid_t fork_and_exec(int pipe_parent_to_child[2], int pipe_child_to_parent[2]);
-void transfer_with_transformation(int file, int pipe_parent_to_child[2], int pipe_child_to_parent[2]);
+int setup_pipes(int pipe_child_to_parent[2]);
+pid_t fork_and_exec(int fd, int pipe_child_to_parent[2]);
+void transfer_with_transformation(int pipe_child_to_parent[2]);
 void transfer_without_transformation(int file);
 
 int get_command_value( char* command ){
@@ -203,25 +203,24 @@ void send_file(const char *filename) {
     }
 
     if (cli_data->pop3->trans_enabled) {
-        int pipe_parent_to_child[2];
         int pipe_child_to_parent[2];
 
-        if (setup_pipes(pipe_parent_to_child, pipe_child_to_parent) != 0) {
+        if (setup_pipes(pipe_child_to_parent) != 0) {
             close(file);
             return;
         }
 
-        cli_data->trans_in = pipe_parent_to_child[0];
+        cli_data->trans_in = -1;
         cli_data->trans_out = pipe_child_to_parent[1];
 
-        pid_t pid = fork_and_exec(pipe_parent_to_child, pipe_child_to_parent);
+        pid_t pid = fork_and_exec(file, pipe_child_to_parent);
         if (pid < 0) {
             close(file);
             return;
         }
 
         if (pid > 0) { 
-            transfer_with_transformation(file, pipe_parent_to_child, pipe_child_to_parent);
+            transfer_with_transformation(pipe_child_to_parent);
         }
     } else {
         transfer_without_transformation(file);
@@ -249,16 +248,15 @@ void send_file_process(const char *filename) {
     }
 }
 
-int setup_pipes(int pipe_parent_to_child[2], int pipe_child_to_parent[2]) {
-    if (pipe(pipe_parent_to_child) == -1 || pipe(pipe_child_to_parent) == -1) {
+int setup_pipes(int pipe_child_to_parent[2]) {
+    if (pipe(pipe_child_to_parent) == -1) {
         perror("Failed to create pipes");
         return -1;
     }
     return 0;
 }
 
-
-pid_t fork_and_exec(int pipe_parent_to_child[2], int pipe_child_to_parent[2]) {
+pid_t fork_and_exec(int fd, int pipe_child_to_parent[2]) {
     pid_t pid = fork();
     if (pid < 0) {
         perror("Failed to fork");
@@ -266,7 +264,7 @@ pid_t fork_and_exec(int pipe_parent_to_child[2], int pipe_child_to_parent[2]) {
     }
 
     if (pid == 0) {
-        if (dup2(pipe_parent_to_child[0], STDIN_FILENO) == -1) {
+        if (dup2(fd, STDIN_FILENO) == -1) {
             perror("Failed to redirect stdin");
             exit(EXIT_FAILURE);
         }
@@ -275,63 +273,35 @@ pid_t fork_and_exec(int pipe_parent_to_child[2], int pipe_child_to_parent[2]) {
             exit(EXIT_FAILURE);
         }
 
-        close(pipe_parent_to_child[0]);
         close(pipe_child_to_parent[1]);
 
-        char *argv[] = {cli_data->pop3->trans->trans_binary_path, "--unbuffered", cli_data->pop3->trans->trans_args, NULL};
+        char *argv[] = {cli_data->pop3->trans->trans_binary_path, cli_data->pop3->trans->trans_args, NULL};
         execve(argv[0], argv, NULL);
 
         perror("Failed to execute transformation process");
         exit(EXIT_FAILURE);
     }
 
-    close(pipe_parent_to_child[0]); 
     close(pipe_child_to_parent[1]); 
     return pid;
 }
 
-int write_to_pipe(int pipe_fd, const char *data, size_t data_len) {
-    size_t total_written = 0;
-    while (total_written < data_len) {
-        ssize_t bytes_written = write(pipe_fd, data + total_written, data_len - total_written);
-        if (bytes_written < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            perror("Failed to write to pipe");
-            return -1; 
-        }
-        total_written += bytes_written;
-    }
-    return 0;
-}
-
-void transfer_with_transformation(int file, int pipe_parent_to_child[2], int pipe_child_to_parent[2]) {
-    ssize_t bytes_read, bytes_sent, aux_read;
-    while ((bytes_read = read(file, cli_data->recv_trans_buffer, sizeof(cli_data->recv_trans_buffer))) > 0) {
-
-        if (bytes_read < 0) {
-            perror("Failed to read file");
-        }
-        
-        if (write_to_pipe(pipe_parent_to_child[1], cli_data->recv_trans_buffer, bytes_read) < 0) {
-            perror("Failed to write to pipe");
-            break;
-        }
+void transfer_with_transformation( int pipe_child_to_parent[2]) {
+    ssize_t bytes_sent, aux_read;
 
         while ((aux_read = read(pipe_child_to_parent[0], cli_data->send_trans_buffer, sizeof(cli_data->send_trans_buffer))) > 0) {
+            if (aux_read < 0) {
+                perror("Failed to read from pipe");
+                break;
+            }
             bytes_sent = write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, cli_data->send_trans_buffer, aux_read);
+            
             if (bytes_sent < 0) {
                 perror("Failed to send file data through socket");
                 break;
             }
         }
 
-        if (aux_read < 0) {
-            perror("Failed to read from pipe");
-            break;
-        }
-    }
 }
 
 void transfer_without_transformation(int file) {
