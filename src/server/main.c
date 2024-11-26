@@ -227,7 +227,7 @@ int main( const int argc, char **argv ) {
                         }
                     }
                 } else {
-                    handle_client(&clients[i-2], metrics);
+                    handle_client(&clients[i-2], metrics, &server_socket, &server_addr, &pollfds[0].fd);
                     if(clients[i-2].client_state == ERROR_CLIENT || clients[i-2].client_state == CLOSING){
                         handle_close_client(i--);
                     }

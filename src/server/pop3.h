@@ -29,6 +29,9 @@
 #define BUFFER_SIZE 1024
 #define USER_SIZE 256
 #define LOGGER_FILE "connections.log"
+#define MAX_IP_LENGTH 46
+#define MAX_PORT 65535
+#define MIN_PORT 1024
 
 enum pop3_state {
     // se fija que le pidieron
@@ -152,7 +155,7 @@ typedef struct Client_data {
     enum client_state client_state;
 } Client_data;
 
-void handle_client(Client_data* client_data, Metrics* metrics);
+void handle_client(Client_data* client_data, Metrics* metrics, int* server_socket, struct sockaddr_in6* server_addr, int* server_fd);
 void free_pop3_structure( pop3_structure* pop3_struct );
 void log_connection(const char *filename, const char *ip, const char * message); 
 int read_socket_buffer(char *recv_buffer, int socket_fd, size_t buffer_size);

@@ -20,6 +20,9 @@ int setup_pipes(int pipe_child_to_parent[2]);
 pid_t fork_and_exec(int fd, int pipe_child_to_parent[2]);
 void transfer_with_transformation(int pipe_child_to_parent[2]);
 void transfer_without_transformation(int file);
+int validate_ip(const char *ip_str);
+int validate_port(int port);
+int update_server_address(int *server_socket, struct sockaddr_in6 *addr, const char *new_ip, int new_port); 
 
 int get_command_value( char* command ){
 
@@ -753,10 +756,9 @@ int parse_number(buffer* buff){
     return num;
 }
 
-void handle_client(Client_data* client_data, Metrics* metrics) {
+void handle_client(Client_data* client_data, Metrics* metrics, int* server_socket, struct sockaddr_in6* server_addr, int* server_fd) {
     ssize_t bytes_received;
     
-
     pop3 = client_data->pop3;
     cli_data = client_data;
 
@@ -950,6 +952,7 @@ void handle_client(Client_data* client_data, Metrics* metrics) {
                     }
                     response = "+OK\r\n";
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
+                    update_server_address(server_socket, server_addr, NULL, atoi(command+5));
                     break;
                 case HOST:
                     if ( client_data->client_state != MANAGER ){
@@ -996,8 +999,11 @@ void handle_client(Client_data* client_data, Metrics* metrics) {
                         break;
                     }
                     response = "+OK\r\n";
+                    char * ip = calloc(1, strlen(command+5));
+                    strcpy(ip, command+5);
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-
+                    update_server_address(server_socket, server_addr, ip, 0);
+                    free(ip);
                     break;
                 case INFO:
                     if ( client_data->client_state != MANAGER ){
@@ -1016,7 +1022,7 @@ void handle_client(Client_data* client_data, Metrics* metrics) {
                     }
                     sprintf(response, "+OK %d;%d;%d;%d\r\n", metrics->total_messages, metrics->total_bytes, metrics->total_historic_connections, metrics->max_consecutive_connections);
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
-
+                    
                     break;
                 case LOGG:
                     if ( client_data->client_state != MANAGER ){
@@ -1086,6 +1092,79 @@ int client_validation(buffer* buff, Client_data* client_data) {
     buffer_read_adv( buff, buff->write-buff->read );
     return 1;
 
+}
+
+int validate_ip(const char *ip_str) {
+    struct sockaddr_in sa;
+    struct sockaddr_in6 sa6;
+
+    if (inet_pton(AF_INET, ip_str, &(sa.sin_addr)) == 1) {
+        return 1;
+    }
+
+    if (inet_pton(AF_INET6, ip_str, &(sa6.sin6_addr)) == 1) {
+        return 1;
+    }
+
+    return 0;
+}
+
+int validate_port(int port) {
+    return (port >= MIN_PORT && port <= MAX_PORT);
+}
+
+int update_server_address(int *server_socket, struct sockaddr_in6 *addr, const char *new_ip, int new_port) {
+    if (new_ip == NULL && new_port > 0) {
+        addr->sin6_port = htons(new_port);
+        printf("Port updated to: %d\n", new_port);
+    }
+    else if (new_ip != NULL && new_port == 0) {
+        if (inet_pton(AF_INET6, new_ip, &(addr->sin6_addr)) <= 0) {
+            perror("Invalid IPv6 address");
+            return -1;
+        }
+        printf("IP address updated to: %s\n", new_ip);
+    } 
+    else {
+        printf("Cannot update both IP and Port at the same time.\n");
+        return -1;
+    }
+
+    close(*server_socket);
+
+    *server_socket = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (*server_socket == -1) {
+        perror("Socket creation failed");
+        return -1;
+    }
+
+    int opt = 1;
+    if (setsockopt(*server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt(SO_REUSEADDR) failed");
+        close(*server_socket);
+        return -1;
+    }
+
+    opt = 0;
+    if (setsockopt(*server_socket, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt(IPV6_V6ONLY) failed");
+        close(*server_socket);
+        return -1;
+    }
+
+    if (bind(*server_socket, (struct sockaddr*) addr, sizeof(*addr)) < 0) {
+        perror("Bind failed");
+        close(*server_socket);
+        return -1;
+    }
+
+    if (listen(*server_socket, 5) < 0) {
+        perror("Listen failed");
+        close(*server_socket);
+        return -1;
+    }
+
+    return *server_socket;
 }
 
 int password_validation(buffer* buff, Client_data* client_data) {
