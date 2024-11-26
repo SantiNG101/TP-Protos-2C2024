@@ -110,7 +110,7 @@ typedef struct pop3_structure {
     int mng_socket;
 }pop3_structure;
 
-typedef struct metrics {
+typedef struct Metrics {
     int total_messages;
     int total_bytes;
     int total_historic_connections;

@@ -6,8 +6,8 @@
 // A 1024 sockets. 1 server 1 cliente -> 512 clientes max en simultaneo
 // => 512 eventos maximo en simultaneo 
 
-#define MAX_CLIENTS 512
-#define MAX_EVENTS 512
+#define MAX_CLIENTS 1022
+#define MAX_EVENTS 1024
 
 static int client_count = 0;
 static int historic_client_count = 0;
@@ -23,10 +23,10 @@ sigterm_handler(const int signal) {
 
 struct Client_data clients[MAX_CLIENTS];
 
-struct pollfd pollfds[MAX_CLIENTS + 1];
+struct pollfd pollfds[MAX_EVENTS];
 
 void init_pollfds() {
-    for (int i = 0; i < MAX_CLIENTS; i++) {
+    for (int i = 0; i < MAX_EVENTS; i++) {
         pollfds[i].fd = -1;
         pollfds[i].events = POLLIN;
     }
@@ -34,8 +34,8 @@ void init_pollfds() {
 
 int add_client(int client_fd, pop3_structure* pop3_struct, Metrics* metrics) {
     if(client_count < MAX_CLIENTS + 1){
-        pollfds[client_count+1].fd = client_fd;
-        pollfds[client_count+1].events = POLLIN;
+        pollfds[client_count+2].fd = client_fd;
+        pollfds[client_count+2].events = POLLIN;
 
         metrics->total_historic_connections++;
         metrics->max_consecutive_connections= client_count > metrics->max_consecutive_connections? client_count : metrics->max_consecutive_connections;
@@ -50,13 +50,13 @@ int add_client(int client_fd, pop3_structure* pop3_struct, Metrics* metrics) {
 
 int handle_close_client(int index) {
     close(pollfds[index].fd);
-    pollfds[index].fd = pollfds[client_count].fd;
-    pollfds[index].events = pollfds[client_count].events;
+    pollfds[index].fd = pollfds[client_count+1].fd;
+    pollfds[index].events = pollfds[client_count+1].events;
 
-    pollfds[client_count].fd = -1;
-    pollfds[client_count].events = POLLIN;
+    pollfds[client_count+1].fd = -1;
+    pollfds[client_count+1].events = POLLIN;
 
-    clients[index-1] = clients[client_count-1];
+    clients[index-2] = clients[client_count-1];
 
     clients[client_count-1].cli_socket = -1;
     clients[client_count-1].client_state = -1;
@@ -68,13 +68,17 @@ int handle_close_client(int index) {
 
 int main( const int argc, char **argv ) {
     int server_socket;
+    int manager_server_socket; 
+
     struct sockaddr_in6 server_addr;
+    struct sockaddr_in6 server_manager_addr;
+
     pop3_structure* pop3_struct = calloc(1, sizeof(pop3_structure));
     signal(SIGINT, sigterm_handler);
     // arguments
     parse_args(argc, argv, pop3_struct);
 
-    Metrics* metrics = calloc(1, sizeof(metrics));
+    Metrics* metrics = calloc(1, sizeof(Metrics));
     metrics->total_messages = 0;
     metrics->total_bytes = 0;
     metrics->total_historic_connections = 0;
@@ -87,8 +91,23 @@ int main( const int argc, char **argv ) {
     }
     pop3_struct->server_socket = server_socket;
 
+    manager_server_socket = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (manager_server_socket == -1) {
+        perror("Manager socket creation failed");
+        close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    pop3_struct->mng_socket = manager_server_socket;
+
     int opt = 0;
     if (setsockopt(server_socket, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt)) < 0) {
+        perror("Failed to set IPV6_V6ONLY");
+        close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    if (setsockopt(manager_server_socket, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt)) < 0) {
         perror("Failed to set IPV6_V6ONLY");
         close(server_socket);
         exit(EXIT_FAILURE);
@@ -101,13 +120,30 @@ int main( const int argc, char **argv ) {
         exit(EXIT_FAILURE);
     }
 
+    if (setsockopt(manager_server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt(SO_REUSEADDR) failed");
+        close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin6_family = AF_INET6;
     server_addr.sin6_addr = in6addr_any; 
     server_addr.sin6_port = htons(pop3_struct->port);
 
+    memset(&server_manager_addr, 0, sizeof(server_manager_addr));
+    server_manager_addr.sin6_family = AF_INET6;
+    server_manager_addr.sin6_addr = in6addr_any; 
+    server_manager_addr.sin6_port = htons(pop3_struct->mng_port);
+
     if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("Binding failed");
+        close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    if (bind(manager_server_socket, (struct sockaddr*)&server_manager_addr, sizeof(server_manager_addr)) < 0) {
+        perror("Binding of manager socket failed");
         close(server_socket);
         exit(EXIT_FAILURE);
     }
@@ -117,29 +153,38 @@ int main( const int argc, char **argv ) {
         close(server_socket);
         exit(EXIT_FAILURE);
     }
-    printf("Server started on port %d, accepting IPv4 and IPv6 connections...\n", pop3_struct->port);
+
+    if (listen(manager_server_socket, MAX_CLIENTS) < 0) {
+        perror("Listening of manager socket failed");
+        close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Server started on port %d and for managers on port %d, accepting IPv4 and IPv6 connections...\n", pop3_struct->port, pop3_struct->mng_port);
 
     init_pollfds();
 
     pollfds[0].fd = server_socket;
     pollfds[0].events = POLLIN;
+    pollfds[1].fd = manager_server_socket;
+    pollfds[1].events = POLLIN;
 
     while (!done) {
-        int poll_count = poll(pollfds, client_count + 1, -1);
+        int poll_count = poll(pollfds, client_count + 2, -1);
 
         if (poll_count < 0) {
             perror("poll failed");
             break;
         }
 
-        for (int i = 0; i <= client_count; i++) {
+        for (int i = 0; i <= client_count+1; i++) {
             if (pollfds[i].revents & POLLIN) {
                 pollfds[i].revents = 0;
 
-                if (pollfds[i].fd == server_socket) {
+                if (pollfds[i].fd == server_socket || pollfds[i].fd == manager_server_socket) {
                     struct sockaddr_storage client_addr;
                     socklen_t addr_len = sizeof(client_addr);
-                    int client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &addr_len);
+                    int client_socket = accept(pollfds[i].fd, (struct sockaddr*)&client_addr, &addr_len);
                     if (client_socket < 0) {
                         perror("Accept failed");
                     } else {
@@ -155,8 +200,8 @@ int main( const int argc, char **argv ) {
                         }
                     }
                 } else {
-                    handle_client(&clients[i-1], metrics);
-                    if(clients[i-1].client_state == ERROR_CLIENT || clients[i-1].client_state == CLOSING){
+                    handle_client(&clients[i-2], metrics);
+                    if(clients[i-2].client_state == ERROR_CLIENT || clients[i-2].client_state == CLOSING){
                         handle_close_client(i--);
                     }
                 }
