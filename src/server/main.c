@@ -55,6 +55,7 @@ int add_client(int client_fd, pop3_structure* pop3_struct, Metrics* metrics, uns
 }
 
 int handle_close_client(int index) {
+    log_connection(LOGGER_FILE, clients[index-2].ip, "Disconnected");
     close(pollfds[index].fd);
     pollfds[index].fd = pollfds[client_count+1].fd;
     pollfds[index].events = pollfds[client_count+1].events;
