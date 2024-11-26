@@ -121,6 +121,7 @@ enum client_state {
     AUTHORIZATION,
     TRANSACTION,
     CLOSING,
+    MANAGER,
     ERROR_CLIENT = -1
 };
 

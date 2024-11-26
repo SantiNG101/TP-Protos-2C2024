@@ -32,7 +32,7 @@ void init_pollfds() {
     }
 }
 
-int add_client(int client_fd, pop3_structure* pop3_struct, Metrics* metrics) {
+int add_client(int client_fd, pop3_structure* pop3_struct, Metrics* metrics, unsigned char is_manager) {
     if(client_count < MAX_CLIENTS + 1){
         pollfds[client_count+2].fd = client_fd;
         pollfds[client_count+2].events = POLLIN;
@@ -40,7 +40,12 @@ int add_client(int client_fd, pop3_structure* pop3_struct, Metrics* metrics) {
         metrics->total_historic_connections++;
         metrics->max_consecutive_connections= client_count > metrics->max_consecutive_connections? client_count : metrics->max_consecutive_connections;
 
-        clients[client_count].client_state = AUTHORIZATION;
+        if(is_manager){
+            clients[client_count].client_state = MANAGER;
+        } else {
+            clients[client_count].client_state = AUTHORIZATION;
+        }
+
         clients[client_count].pop3 = pop3_struct;
         clients[client_count].user = NULL;
         return 0;
@@ -188,7 +193,7 @@ int main( const int argc, char **argv ) {
                     if (client_socket < 0) {
                         perror("Accept failed");
                     } else {
-                        if (add_client(client_socket, pop3_struct, metrics) < 0) {
+                        if (add_client(client_socket, pop3_struct, metrics, pollfds[i].fd == manager_server_socket) < 0) {
                             printf("Too many clients\n");
                             close(client_socket);
                         } else {
@@ -213,6 +218,6 @@ int main( const int argc, char **argv ) {
     free_pop3_structure(pop3_struct);
     close(server_socket);
     close(manager_server_socket);
-    
+
     return 0;
 }
