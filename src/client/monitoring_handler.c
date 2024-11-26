@@ -160,25 +160,13 @@ void verify_server_status(void) {
 }
 
 int retrieve_pop3_stats(void) {
-    char *token;
-
     // Enviar el comando STAT para obtener el número total de mensajes y su tamaño
     if (send_command(STATUS_CMD) == 0) {
 
         // Procesar respuesta utilizando sscanf
-        if (sscanf(response_buffer, "+OK %d %d", &total_messages, &total_bytes) != 2) {
+        if (sscanf(response_buffer, "+OK %d messages (%d octets)", &total_messages, &total_bytes) != 2) {
             perror("Failed to parse STAT response");
             return STAT_ERROR; // Indica error al analizar la respuesta
-        }
-
-        token = strtok(response_buffer, " "); // Ignorar "+OK"
-        token = strtok(NULL, " "); // Obtener número de mensajes
-        if (token != NULL) {
-            total_messages = atoi(token);
-        }
-        token = strtok(NULL, " "); // Obtener tamaño total
-        if (token != NULL) {
-            total_bytes = atoi(token);
         }
 
         return 0;
