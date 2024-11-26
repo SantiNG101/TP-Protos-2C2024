@@ -371,7 +371,7 @@ enum pop3_directory {
     TMP
 };
 
-int view_message( int file_number ){
+int view_message( int file_number, Metrics* metrics ){
 
     // reccoro la lista buscando el archivo y obtengo el nombre con el numero
     char buffer[BUFFER_SIZE];
@@ -398,6 +398,8 @@ int view_message( int file_number ){
 
     char buffer2[BUFFER_SIZE];
     sprintf(buffer2, "+OK %d octets\r\n", file->size);
+    metrics->total_bytes += file->size;
+    metrics->total_messages++;
     write_socket_buffer(cli_data->send_buffer, cli_data->cli_socket, buffer2, strlen(buffer2));
     //sendcli_socket, buffer2, strlen(buffer2), 0);
 
@@ -701,7 +703,7 @@ int parse_number(buffer* buff){
     return num;
 }
 
-void handle_client(Client_data* client_data ) {
+void handle_client(Client_data* client_data, Metrics* metrics) {
     ssize_t bytes_received;
     
 
@@ -855,7 +857,8 @@ void handle_client(Client_data* client_data ) {
                             //sendcli_socket, response, strlen(response), 0);
                             break;
                         }
-                        view_message(num);
+                        view_message(num, metrics);
+                        
                     }
                     break;
                 case DELE:

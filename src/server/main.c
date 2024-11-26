@@ -32,10 +32,13 @@ void init_pollfds() {
     }
 }
 
-int add_client(int client_fd, pop3_structure* pop3_struct) {
+int add_client(int client_fd, pop3_structure* pop3_struct, Metrics* metrics) {
     if(client_count < MAX_CLIENTS + 1){
         pollfds[client_count+1].fd = client_fd;
         pollfds[client_count+1].events = POLLIN;
+
+        metrics->total_historic_connections++;
+        metrics->max_consecutive_connections= client_count > metrics->max_consecutive_connections? client_count : metrics->max_consecutive_connections;
 
         clients[client_count].client_state = AUTHORIZATION;
         clients[client_count].pop3 = pop3_struct;
@@ -70,6 +73,12 @@ int main( const int argc, char **argv ) {
     signal(SIGINT, sigterm_handler);
     // arguments
     parse_args(argc, argv, pop3_struct);
+
+    Metrics* metrics = calloc(1, sizeof(metrics));
+    metrics->total_messages = 0;
+    metrics->total_bytes = 0;
+    metrics->total_historic_connections = 0;
+    metrics->max_consecutive_connections = 0;
 
     server_socket = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (server_socket == -1) {
@@ -134,7 +143,7 @@ int main( const int argc, char **argv ) {
                     if (client_socket < 0) {
                         perror("Accept failed");
                     } else {
-                        if (add_client(client_socket, pop3_struct) < 0) {
+                        if (add_client(client_socket, pop3_struct, metrics) < 0) {
                             printf("Too many clients\n");
                             close(client_socket);
                         } else {
@@ -146,7 +155,7 @@ int main( const int argc, char **argv ) {
                         }
                     }
                 } else {
-                    handle_client(&clients[i-1]);
+                    handle_client(&clients[i-1], metrics);
                     if(clients[i-1].client_state == ERROR_CLIENT || clients[i-1].client_state == CLOSING){
                         handle_close_client(i--);
                     }
@@ -155,6 +164,7 @@ int main( const int argc, char **argv ) {
         }
     }
     
+    free(metrics);
     free_pop3_structure(pop3_struct);
     close(server_socket);
 

@@ -110,6 +110,13 @@ typedef struct pop3_structure {
     int mng_socket;
 }pop3_structure;
 
+typedef struct metrics {
+    int total_messages;
+    int total_bytes;
+    int total_historic_connections;
+    int max_consecutive_connections;
+}Metrics;
+
 enum client_state {
     AUTHORIZATION,
     TRANSACTION,
@@ -134,7 +141,7 @@ typedef struct Client_data {
     enum client_state client_state;
 } Client_data;
 
-void handle_client(Client_data* client_data);
+void handle_client(Client_data* client_data, Metrics* metrics);
 void free_pop3_structure( pop3_structure* pop3_struct );
 
 int read_socket_buffer(char *recv_buffer, int socket_fd, size_t buffer_size);
