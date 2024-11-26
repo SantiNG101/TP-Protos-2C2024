@@ -70,7 +70,8 @@ void split_t_arg( char* original, char** path, char** right_hand_arg){
     if (original[i] == ':') {
         snprintf(*right_hand_arg, len + 1, "%s", original + i + 1);
     } else {
-        right_hand_arg[0] = '\0';
+        free(*right_hand_arg);
+        *right_hand_arg= NULL;
     }
 }
 

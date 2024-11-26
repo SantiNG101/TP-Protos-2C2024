@@ -893,9 +893,11 @@ void handle_client(Client_data* client_data ) {
                     response = "+OK Goodbye\r\n";
                     write_socket_buffer(client_data->send_buffer, client_data->cli_socket, response, strlen(response));
                     //sendcli_socket, response, strlen(response), 0);
+                    if ( client_data->client_state == TRANSACTION ){
+                        delete_marked();
+                        destroy_maildir();
+                    }
                     client_data->client_state = CLOSING;
-                    delete_marked();
-                    destroy_maildir();
                     printf("Client disconnected.\n");
                     close(client_data->cli_socket);
                     free(b);
@@ -954,11 +956,16 @@ int password_validation(buffer* buff, Client_data* client_data) {
     }
     
     char* pass = buffer_read_ptr( buff, &(size_t){ buff->write-buff->read } );
-    pass[buff->write-buff->read-1] = '\0'; // elimino el \n
 
-    size_t pass_len = strlen(pass);
+    size_t pass_len = strlen(client_data->user->pass);
     // Compara la contraseña leída con la almacenada
-    if (strncmp(client_data->user->pass, pass, pass_len) == 0) {
+    if (pass_len == strlen(pass)) {
+        while (pass_len-- > 0) {
+            if (client_data->user->pass[pass_len] != pass[pass_len]) {
+                buffer_read_adv( buff, buff->write-buff->read );
+                return 1;  // Contraseña incorrecta
+            }
+        }
         buffer_read_adv( buff, buff->write-buff->read );
         return 0;  // Contraseña correcta
     } else {
