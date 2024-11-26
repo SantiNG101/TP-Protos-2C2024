@@ -290,12 +290,31 @@ pid_t fork_and_exec(int pipe_parent_to_child[2], int pipe_child_to_parent[2]) {
     return pid;
 }
 
+int write_to_pipe(int pipe_fd, const char *data, size_t data_len) {
+    size_t total_written = 0;
+    while (total_written < data_len) {
+        ssize_t bytes_written = write(pipe_fd, data + total_written, data_len - total_written);
+        if (bytes_written < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            perror("Failed to write to pipe");
+            return -1; 
+        }
+        total_written += bytes_written;
+    }
+    return 0;
+}
 
 void transfer_with_transformation(int file, int pipe_parent_to_child[2], int pipe_child_to_parent[2]) {
     ssize_t bytes_read, bytes_sent, aux_read;
     while ((bytes_read = read(file, cli_data->recv_trans_buffer, sizeof(cli_data->recv_trans_buffer))) > 0) {
-        ssize_t bytes_written = write(pipe_parent_to_child[1], cli_data->recv_trans_buffer, bytes_read);
-        if (bytes_written < 0) {
+
+        if (bytes_read < 0) {
+            perror("Failed to read file");
+        }
+        
+        if (write_to_pipe(pipe_parent_to_child[1], cli_data->recv_trans_buffer, bytes_read) < 0) {
             perror("Failed to write to pipe");
             break;
         }
@@ -312,10 +331,6 @@ void transfer_with_transformation(int file, int pipe_parent_to_child[2], int pip
             perror("Failed to read from pipe");
             break;
         }
-    }
-
-    if (bytes_read < 0) {
-        perror("Failed to read file");
     }
 }
 
